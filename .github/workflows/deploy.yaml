@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - main
+      - staging
     paths:
       - 'mobile/**'  # Only trigger if mobile code changes
 
@@ -36,4 +37,11 @@ jobs:
         run: npm ci
 
       - name: 🚀 Publish Update
-        run: eas update --branch preview --message "Auto-deploy from GitHub: ${{ github.sha }}"
+        run: |
+          if [ "${{ github.ref }}" = "refs/heads/main" ]; then
+            eas update --branch production --message "Prod Deploy: ${{ github.sha }}"
+            echo "🚀 Deployed to PRODUCTION channel"
+          else
+            eas update --branch preview --message "Staging Deploy: ${{ github.sha }}"
+            echo "🧪 Deployed to PREVIEW channel (from staging branch)"
+          fi
