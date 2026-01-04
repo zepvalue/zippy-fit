@@ -1,5 +1,6 @@
   - type: web
     name: zippy-fit-backend
+    branch: staging
     runtime: python
     rootDir: backend
     buildCommand: pip install -r requirements.txt
