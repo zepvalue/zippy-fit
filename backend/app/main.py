@@ -77,7 +77,14 @@ def join_team(req: JoinRequest, user_id: str = Depends(get_current_user)):
         raise HTTPException(status_code=400, detail="Team is full!")
 
     # 3. Join the team
+    # 3. Join the team
     supabase.table("profiles").update({"team_id": team_id}).eq("id", user_id).execute()
+
+    # 4. Clear any stale nudges so the new user isn't bombarded
+    supabase.table("teams").update({
+        "last_nudge_at": None,
+        "nudge_from_id": None
+    }).eq("id", team_id).execute()
 
     return {"team_id": team_id, "code": req.code, "message": "Joined successfully"}
 

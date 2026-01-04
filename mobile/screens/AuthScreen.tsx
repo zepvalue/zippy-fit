@@ -9,25 +9,55 @@ export default function AuthScreen() {
     const [password, setPassword] = useState('');
     const [loading, setLoading] = useState(false);
 
+    // Helper to translate technical errors to friendly messages
+    function getErrorMessage(error: any) {
+        const msg = error.message || "Unknown error";
+        if (msg.includes("Invalid login credentials")) return "Incorrect email or password.";
+        if (msg.includes("already registered")) return "This email is already in use. Try logging in.";
+        if (msg.includes("password should be")) return "Password is too weak. content length must be at least 6 characters.";
+        if (msg.includes("invalid_grant")) return "Invalid login details.";
+        return msg;
+    }
+
+    // Helper for validation
+    function validateInputs() {
+        if (!email.trim() || !password.trim()) {
+            Alert.alert("Missing Info", "Please enter both email and password.");
+            return false;
+        }
+        return true;
+    }
+
     async function signInWithEmail() {
+        if (!validateInputs()) return;
         setLoading(true);
         const { error } = await supabase.auth.signInWithPassword({
             email: email,
             password: password,
         });
 
-        if (error) Alert.alert("Error", error.message);
+        if (error) {
+            Alert.alert("Login Failed", getErrorMessage(error));
+        }
         setLoading(false);
     }
 
     async function signUpWithEmail() {
+        if (!validateInputs()) return;
         setLoading(true);
         const { error } = await supabase.auth.signUp({
             email: email,
             password: password,
+            options: {
+                emailRedirectTo: 'zippyfit://auth-callback'
+            }
         });
 
-        if (error) Alert.alert("Check your inbox!", "We sent you a verification link.");
+        if (error) {
+            Alert.alert("Signup Failed", getErrorMessage(error));
+        } else {
+            Alert.alert("Check your inbox!", "We sent you a verification link.");
+        }
         setLoading(false);
     }
 
@@ -38,6 +68,7 @@ export default function AuthScreen() {
             < View style={styles.inputContainer} >
                 <TextInput
                     placeholder="Email"
+                    placeholderTextColor="#A0A0A0"
                     value={email}
                     onChangeText={setEmail}
                     autoCapitalize="none"
@@ -45,6 +76,7 @@ export default function AuthScreen() {
                 />
                 <TextInput
                     placeholder="Password"
+                    placeholderTextColor="#A0A0A0"
                     value={password}
                     onChangeText={setPassword}
                     secureTextEntry
@@ -69,6 +101,7 @@ const styles = StyleSheet.create({
         padding: 15,
         fontSize: 18,
         marginBottom: 10,
-        backgroundColor: '#F7F7F7'
+        backgroundColor: '#F7F7F7',
+        color: '#333333' // Ensure text is visible
     }
 });
