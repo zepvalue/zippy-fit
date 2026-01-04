@@ -2,7 +2,7 @@ import random
 import string
 from fastapi import FastAPI, Depends, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from app.auth import get_current_user, supabase
+from app.auth import get_authenticated_client
 from app.schemas import JoinRequest, TeamResponse
 from datetime import datetime, timezone, timedelta
 
@@ -23,20 +23,20 @@ def generate_code(length=4):
     return ''.join(random.choice(chars) for _ in range(length))
 
 # --- ENDPOINT 1: Create a Team ---
-# backend/app/main.py
-# backend/app/main.py
 @app.post("/team/create", response_model=TeamResponse)
-def create_team(user_id: str = Depends(get_current_user)):
+def create_team(auth: tuple = Depends(get_authenticated_client)):
+    user_id, client = auth
+
     # 1. Check if user is already in a team
-    user_data = supabase.table("profiles").select("team_id").eq("id", user_id).execute()
+    user_data = client.table("profiles").select("team_id").eq("id", user_id).execute()
     
     # --- SELF-HEALING: Create Profile if missing ---
     if not user_data.data:
         print(f"🛠️ FIX: Creating missing profile for {user_id}")
         # Insert minimal profile so we can proceed
-        supabase.table("profiles").insert({"id": user_id}).execute()
+        client.table("profiles").insert({"id": user_id}).execute()
         # Re-fetch (should be empty team_id)
-        user_data = supabase.table("profiles").select("team_id").eq("id", user_id).execute()
+        user_data = client.table("profiles").select("team_id").eq("id", user_id).execute()
     # -----------------------------------------------
 
     # If the profile exists AND has a team_id
@@ -51,15 +51,14 @@ def create_team(user_id: str = Depends(get_current_user)):
         "hearts": 3,
         "streak": 0
     }
-    result = supabase.table("teams").insert(team_data).execute()
+    result = client.table("teams").insert(team_data).execute()
     new_team_id = result.data[0]['id']
 
     # 3. Link User to Team
-    update_response = supabase.table("profiles").update({"team_id": new_team_id}).eq("id", user_id).execute()
+    update_response = client.table("profiles").update({"team_id": new_team_id}).eq("id", user_id).execute()
 
     # 4. CRITICAL CHECK: Did the update work?
     if not update_response.data:
-        # Should not happen now due to self-healing above
         print(f"🚨 ERROR: User {user_id} has no profile row even after fix attempt!")
         raise HTTPException(
             status_code=500, 
@@ -70,10 +69,12 @@ def create_team(user_id: str = Depends(get_current_user)):
 
 # --- ENDPOINT 2: Join a Team ---
 @app.post("/team/join", response_model=TeamResponse)
-def join_team(req: JoinRequest, user_id: str = Depends(get_current_user)):
+def join_team(req: JoinRequest, auth: tuple = Depends(get_authenticated_client)):
+    user_id, client = auth
+
     # 1. Find team by code
     # Note: We use .upper() to make it case-insensitive
-    response = supabase.table("teams").select("id").eq("code", req.code.upper()).execute()
+    response = client.table("teams").select("id").eq("code", req.code.upper()).execute()
     
     if not response.data:
         raise HTTPException(status_code=404, detail="Invalid invite code")
@@ -81,35 +82,34 @@ def join_team(req: JoinRequest, user_id: str = Depends(get_current_user)):
     team_id = response.data[0]['id']
 
     # 2. Check if team is full (Optional: Limit to 2 people)
-    members = supabase.table("profiles").select("id").eq("team_id", team_id).execute()
+    members = client.table("profiles").select("id").eq("team_id", team_id).execute()
     if len(members.data) >= 2:
         raise HTTPException(status_code=400, detail="Team is full!")
 
     # 3. Join the team
     # --- SELF-HEALING: Ensure profile exists before update ---
-    user_data = supabase.table("profiles").select("id").eq("id", user_id).execute()
+    user_data = client.table("profiles").select("id").eq("id", user_id).execute()
     if not user_data.data:
          print(f"🛠️ FIX: Creating missing profile for {user_id} (Join Flow)")
-         supabase.table("profiles").insert({"id": user_id}).execute()
+         client.table("profiles").insert({"id": user_id}).execute()
     # ---------------------------------------------------------
 
-    supabase.table("profiles").update({"team_id": team_id}).eq("id", user_id).execute()
+    client.table("profiles").update({"team_id": team_id}).eq("id", user_id).execute()
 
     # 4. Clear any stale nudges so the new user isn't bombarded
-    supabase.table("teams").update({
+    client.table("teams").update({
         "last_nudge_at": None,
         "nudge_from_id": None
     }).eq("id", team_id).execute()
 
     return {"team_id": team_id, "code": req.code, "message": "Joined successfully"}
 
-# backend/app/main.py
-
-def process_heart_decay(team_data):
+def process_heart_decay(client, team_data):
     """
     Checks if the team missed yesterday.
     If so, deducts hearts. If hearts hit 0, reset streak.
     Updates the database but preserves the original 'code' in the return value.
+    Note: Requires 'client' to perform the update.
     """
     last_streak_iso = team_data.get('last_streak_at')
     
@@ -142,7 +142,7 @@ def process_heart_decay(team_data):
         yesterday = (now - timedelta(days=1)).isoformat()
         
         # 1. Update Database (Fire and Forget)
-        supabase.table("teams").update({
+        client.table("teams").update({
             "hearts": new_hearts,
             "streak": new_streak,
             "last_streak_at": yesterday 
@@ -161,22 +161,24 @@ def process_heart_decay(team_data):
 
 # 3. Update 'get_dashboard' to use the Helper
 @app.get("/dashboard")
-def get_dashboard(user_id: str = Depends(get_current_user)):
-    profile = supabase.table("profiles").select("team_id").eq("id", user_id).execute()
+def get_dashboard(auth: tuple = Depends(get_authenticated_client)):
+    user_id, client = auth
+
+    profile = client.table("profiles").select("team_id").eq("id", user_id).execute()
     if not profile.data or not profile.data[0]['team_id']:
         return {"has_team": False, "hearts": 0, "streak": 0, "status": "No Team"}
 
     team_id = profile.data[0]['team_id']
-    team_req = supabase.table("teams").select("*").eq("id", team_id).execute()
+    team_req = client.table("teams").select("*").eq("id", team_id).execute()
     team_data = team_req.data[0]
 
     # --- NEW: RUN HEALTH CHECK ---
     # This might modify the team data (lower hearts) before we send it back
-    team_data = process_heart_decay(team_data)
+    team_data = process_heart_decay(client, team_data)
     # -----------------------------
 
     today_start = datetime.now(timezone.utc).strftime("%Y-%m-%d 00:00:00+00")
-    workouts_req = supabase.table("workouts")\
+    workouts_req = client.table("workouts")\
         .select("user_id")\
         .eq("team_id", team_id)\
         .gte("created_at", today_start)\
@@ -213,23 +215,24 @@ def get_dashboard(user_id: str = Depends(get_current_user)):
 
 # 4. Update 'log_workout' to save the Date
 @app.post("/workout")
-def log_workout(user_id: str = Depends(get_current_user)):
-    profile = supabase.table("profiles").select("team_id").eq("id", user_id).execute()
+def log_workout(auth: tuple = Depends(get_authenticated_client)):
+    user_id, client = auth
+    profile = client.table("profiles").select("team_id").eq("id", user_id).execute()
     team_id = profile.data[0]['team_id']
 
-    supabase.table("workouts").insert({ "user_id": user_id, "team_id": team_id }).execute()
+    client.table("workouts").insert({ "user_id": user_id, "team_id": team_id }).execute()
 
     today_start = datetime.now(timezone.utc).strftime("%Y-%m-%d 00:00:00+00")
-    workouts_req = supabase.table("workouts").select("user_id").eq("team_id", team_id).gte("created_at", today_start).execute()
+    workouts_req = client.table("workouts").select("user_id").eq("team_id", team_id).gte("created_at", today_start).execute()
     unique_users = {w['user_id'] for w in workouts_req.data}
 
     status = "logged"
     
     if len(unique_users) >= 2:
-        current_streak = supabase.table("teams").select("streak").eq("id", team_id).execute().data[0]['streak']
+        current_streak = client.table("teams").select("streak").eq("id", team_id).execute().data[0]['streak']
         
         # UPDATE STREAK + LAST_STREAK_AT
-        supabase.table("teams").update({
+        client.table("teams").update({
             "streak": current_streak + 1,
             "last_streak_at": datetime.now(timezone.utc).isoformat() 
         }).eq("id", team_id).execute()
@@ -240,10 +243,11 @@ def log_workout(user_id: str = Depends(get_current_user)):
 
 # --- NEW: History Endpoint ---
 @app.get("/history")
-def get_history(user_id: str = Depends(get_current_user)):
+def get_history(auth: tuple = Depends(get_authenticated_client)):
+    user_id, client = auth
     # Simply return all created_at dates for this user
     # We truncate to YYYY-MM-DD
-    workouts = supabase.table("workouts")\
+    workouts = client.table("workouts")\
         .select("created_at")\
         .eq("user_id", user_id)\
         .execute()
@@ -254,8 +258,9 @@ def get_history(user_id: str = Depends(get_current_user)):
 
 # --- NEW: Nudge Endpoint ---
 @app.post("/team/nudge")
-def send_nudge(user_id: str = Depends(get_current_user)):
-    profile = supabase.table("profiles").select("team_id").eq("id", user_id).execute()
+def send_nudge(auth: tuple = Depends(get_authenticated_client)):
+    user_id, client = auth
+    profile = client.table("profiles").select("team_id").eq("id", user_id).execute()
     if not profile.data or not profile.data[0]['team_id']:
         raise HTTPException(status_code=400, detail="No team found")
     
@@ -265,7 +270,7 @@ def send_nudge(user_id: str = Depends(get_current_user)):
     # Use standard ISO format
     now_iso = datetime.now(timezone.utc).isoformat()
     
-    supabase.table("teams").update({
+    client.table("teams").update({
         "last_nudge_at": now_iso,
         "nudge_from_id": user_id
     }).eq("id", team_id).execute()
