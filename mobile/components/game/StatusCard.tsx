@@ -10,12 +10,12 @@ export default function StatusCard({ status }: StatusCardProps) {
     const isSafe = status === 'SAFE';
 
     return (
-        <View style={[styles.card, { backgroundColor: isSafe ? '#1CB0F6' : '#FF4B4B' }]}>
+        <View style={styles.card}>
             <View style={styles.iconCircle}>
-                <FontAwesome5 name={isSafe ? "shield-alt" : "exclamation-triangle"} size={24} color={isSafe ? '#1CB0F6' : '#FF4B4B'} />
+                <FontAwesome5 name={isSafe ? "shield-alt" : "exclamation-triangle"} size={26} color={isSafe ? '#1CB0F6' : '#FF4B4B'} />
             </View>
             <View style={styles.textContainer}>
-                <Text style={styles.title}>{isSafe ? "SAFE" : "AT RISK"}</Text>
+                <Text style={[styles.title, { color: isSafe ? '#1CB0F6' : '#FF4B4B' }]}>{isSafe ? "SAFE" : "AT RISK"}</Text>
                 <Text style={styles.subtitle}>
                     {isSafe ? "Partner completed their task." : "Partner has not worked out yet!"}
                 </Text>
@@ -27,23 +27,44 @@ export default function StatusCard({ status }: StatusCardProps) {
 const styles = StyleSheet.create({
     card: {
         flexDirection: 'row',
-        padding: 15,
-        borderRadius: 16,
+        padding: 24, // More breathing room
+        borderRadius: 32, // Super rounded
         marginBottom: 20,
         alignItems: 'center',
-        borderBottomWidth: 4,
-        borderBottomColor: 'rgba(0,0,0,0.2)', // Generic shadow
+        // Solid Style (Reverted Glass)
+        backgroundColor: '#fff',
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.1,
+        shadowRadius: 10,
+        elevation: 5,
     },
     iconCircle: {
-        width: 50,
-        height: 50,
-        borderRadius: 25,
+        width: 60, // Larger icon
+        height: 60,
+        borderRadius: 30,
         backgroundColor: 'white',
         alignItems: 'center',
         justifyContent: 'center',
-        marginRight: 15,
+        marginRight: 20,
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.1,
+        shadowRadius: 10,
+        elevation: 5,
     },
     textContainer: { flex: 1 },
-    title: { color: 'white', fontWeight: '900', fontSize: 18, textTransform: 'uppercase' },
-    subtitle: { color: 'rgba(255,255,255,0.9)', fontWeight: '600', fontSize: 14 }
+    title: {
+        color: '#4B4B4B', // Darker text for glass
+        fontWeight: '900',
+        fontSize: 18,
+        textTransform: 'uppercase',
+        marginBottom: 4
+    },
+    subtitle: {
+        color: '#7A7A7A',
+        fontWeight: '600',
+        fontSize: 14,
+        lineHeight: 20
+    }
 });

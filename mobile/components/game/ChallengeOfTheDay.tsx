@@ -77,16 +77,15 @@ export default function ChallengeOfTheDay({ challengeText, onComplete, isComplet
 
 const styles = StyleSheet.create({
     container: {
-        backgroundColor: '#fff',
-        borderRadius: 24,
-        // Removed heavy border, added shadow
-        shadowColor: "#000",
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.1,
-        shadowRadius: 10,
-        elevation: 5,
-        padding: 24, // More breathing room
-        marginTop: 20,
+        // De-widgetized: Transparent background
+        backgroundColor: 'transparent',
+        borderRadius: 0,
+        elevation: 0,
+        shadowOpacity: 0,
+
+        padding: 10,
+        marginTop: 0, // Closer to Zippy
+        marginBottom: 20,
         width: '100%',
         alignItems: 'center',
     },
@@ -111,9 +110,9 @@ const styles = StyleSheet.create({
         lineHeight: 28,
     },
     button: {
-        paddingVertical: 14, // Taller button
+        paddingVertical: 16, // Taller button
         paddingHorizontal: 24,
-        borderRadius: 16,
+        borderRadius: 24, // Pill shape
         backgroundColor: '#58CC02',
         // Removed hard border for cleaner look, or keep subtle one
         shadowColor: "#58CC02",

@@ -13,11 +13,25 @@ const getHeaders = (token: string) => ({
     'Bypass-Tunnel-Reminder': 'true' // Bypass localtunnel warning page
 });
 
+// Helper: Timeout for fetch
+const fetchWithTimeout = async (url: string, options: any, timeout = 10000) => {
+    const controller = new AbortController();
+    const id = setTimeout(() => controller.abort(), timeout);
+    try {
+        const response = await fetch(url, { ...options, signal: controller.signal });
+        clearTimeout(id);
+        return response;
+    } catch (error) {
+        clearTimeout(id);
+        throw error;
+    }
+};
+
 export const api = {
     // 1. Get Dashboard (Now checks for team existence)
     getDashboard: async (token: string) => {
         try {
-            const response = await fetch(`${BASE_URL}/dashboard?t=${Date.now()}`, {
+            const response = await fetchWithTimeout(`${BASE_URL}/dashboard?t=${Date.now()}`, {
                 headers: getHeaders(token)
             });
             if (!response.ok) throw new Error("Server error");
@@ -102,8 +116,23 @@ export const api = {
             const response = await fetch(`${BASE_URL}/history`, {
                 headers: getHeaders(token),
             });
-            return await response.json(); // Returns string[] (dates)
+
+            if (!response.ok) {
+                console.error("🔴 API: getHistory failed status:", response.status);
+                return [];
+            }
+
+            const data = await response.json();
+
+            // Safety check: ensure it is an array
+            if (Array.isArray(data)) {
+                return data;
+            } else {
+                console.warn("⚠️ API: getHistory returned non-array:", data);
+                return [];
+            }
         } catch (error) {
+            console.error("🔴 API Error (getHistory):", error);
             return [];
         }
     },

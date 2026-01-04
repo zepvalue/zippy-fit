@@ -164,12 +164,25 @@ def process_heart_decay(client, team_data):
 def get_dashboard(auth: tuple = Depends(get_authenticated_client)):
     user_id, client = auth
 
+    print(f"🔍 DEBUG: Dashboard request for {user_id}")
     profile = client.table("profiles").select("team_id").eq("id", user_id).execute()
+    
     if not profile.data or not profile.data[0]['team_id']:
+        print(f"ℹ️ DEBUG: No team found for {user_id}")
         return {"has_team": False, "hearts": 0, "streak": 0, "status": "No Team"}
 
     team_id = profile.data[0]['team_id']
+    print(f"🔍 DEBUG: Fetching Team {team_id}")
+    
     team_req = client.table("teams").select("*").eq("id", team_id).execute()
+    
+    # SAFETY CHECK: Orphaned Team ID?
+    if not team_req.data:
+        print(f"🚨 ERROR: Profile text claims team {team_id} but it does not exist in 'teams' table!")
+        # Self-heal: Remove the bad team_id
+        client.table("profiles").update({"team_id": None}).eq("id", user_id).execute()
+        return {"has_team": False, "hearts": 0, "streak": 0, "status": "Team Missing (Fixed)"}
+
     team_data = team_req.data[0]
 
     # --- NEW: RUN HEALTH CHECK ---

@@ -10,10 +10,17 @@ interface ContainerProps {
 export default function Container({ children, style }: ContainerProps) {
     return (
         <LinearGradient
-            // A subtle, fresh gradient: Very light warm tint fading to white
-            colors={['#FFF8F0', '#FFFFFF']}
+            // Warmer, softer gradient base
+            colors={['#FFF8E7', '#FFFFFF']}
             style={styles.outerBackground}
         >
+            {/* Background Blobs */}
+            <View style={styles.blobContainer} pointerEvents="none">
+                <View style={[styles.blob, styles.blob1]} />
+                <View style={[styles.blob, styles.blob2]} />
+                <View style={[styles.blob, styles.blob3]} />
+            </View>
+
             <View style={[styles.constrainedContent, style]}>
                 {children}
             </View>
@@ -26,6 +33,37 @@ const styles = StyleSheet.create({
         flex: 1,
         width: '100%',
         alignItems: 'center',
+    },
+    blobContainer: {
+        ...StyleSheet.absoluteFillObject,
+        overflow: 'hidden',
+    },
+    blob: {
+        position: 'absolute',
+        borderRadius: 999,
+        opacity: 0.4,
+    },
+    blob1: {
+        width: 300,
+        height: 300,
+        backgroundColor: '#FFDEE9', // Soft Pink
+        top: -50,
+        left: -80,
+    },
+    blob2: {
+        width: 250,
+        height: 250,
+        backgroundColor: '#B5FFFC', // Soft Blue
+        bottom: 100,
+        right: -60,
+    },
+    blob3: {
+        width: 200,
+        height: 200,
+        backgroundColor: '#F7FF00', // Soft Yellow
+        top: '40%',
+        left: '60%',
+        opacity: 0.2,
     },
     constrainedContent: {
         flex: 1,

@@ -5,34 +5,16 @@ import {
     Platform, AppState, Vibration
 } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import * as Notifications from 'expo-notifications';
-
 import { api } from '../lib/api';
 import { supabase } from '../lib/supabase';
 
-// Configure Notifications
-if (Platform.OS !== 'web') {
-    try {
-        Notifications.setNotificationHandler({
-            handleNotification: async () => ({
-                shouldPlaySound: true,
-                shouldSetBadge: false,
-                shouldShowBanner: true,
-                shouldShowList: true
-            }),
-        });
-    } catch (error) {
-        console.warn("Could not set notification handler (likely Expo Go limitation):", error);
-    }
-}
-
-import DuoButton from '../components/ui/DuoButton';
 import Container from '../components/ui/Container';
 import NudgeModal from '../components/ui/NudgeModal';
 import StatusCard from '../components/game/StatusCard';
 import ChallengeOfTheDay from '../components/game/ChallengeOfTheDay';
 import ProfileModal from '../components/ui/ProfileModal';
-import HistoryCalendar from '../components/game/HistoryCalendar';
+import JourneyMap from '../components/game/JourneyMap';
+import ZippyMascot from '../components/game/ZippyMascot';
 import OnboardingScreen from './OnboardingScreen';
 
 export default function DashboardScreen({ session }: { session: any }) {
@@ -60,22 +42,6 @@ export default function DashboardScreen({ session }: { session: any }) {
         code: '????'
     });
 
-    useEffect(() => {
-        if (Platform.OS !== 'web') {
-            (async () => {
-                try {
-                    const { status } = await Notifications.requestPermissionsAsync();
-                    console.log("🔔 Notification Permission Status:", status);
-                    if (status === 'denied') {
-                        console.log("⚠️ Notifications are denied—only In-App Nudge Modal will work.");
-                    }
-                } catch (error) {
-                    console.warn("Could not request permissions (likely Expo Go limitation):", error);
-                }
-            })();
-        }
-    }, []);
-
     // REFRESHED LOGIC: This only shows SAFE if the partner is truly READY
 
     const [challengeText, setChallengeText] = useState("Loading challenge...");
@@ -85,33 +51,43 @@ export default function DashboardScreen({ session }: { session: any }) {
         return currentSession?.access_token || null;
     };
 
+    const isFetching = useRef(false);
+
     const fetchData = useCallback(async (silent = false) => {
+        if (isFetching.current) return;
+        isFetching.current = true;
+
         if (!silent) {
             setLoading(true);
             setData(prev => ({ ...prev, partner_completed_today: false, status: 'AT_RISK' }));
         }
 
-        const token = await getFreshToken();
-        if (token) {
-            setInitialToken(token);
+        try {
+            const token = await getFreshToken();
+            if (token) {
+                setInitialToken(token);
 
-            // Parallel Fetching
-            const [dashboardRes, historyRes, challengeRes] = await Promise.all([
-                api.getDashboard(token),
-                api.getHistory(token),
-                api.getChallenge(token)
-            ]);
+                // Parallel Fetching
+                const [dashboardRes, historyRes, challengeRes] = await Promise.all([
+                    api.getDashboard(token),
+                    api.getHistory(token),
+                    api.getChallenge(token)
+                ]);
 
-            if (dashboardRes) {
-                setHasTeam(dashboardRes.has_team);
-                setData({ ...dashboardRes });
-                setNudgeActive(!!dashboardRes.nudge_active);
-                // ... nudge logic omitted for brevity, logic remains same but cleaner if separated ...
+                if (dashboardRes) {
+                    setHasTeam(dashboardRes.has_team);
+                    setData({ ...dashboardRes });
+                    setNudgeActive(!!dashboardRes.nudge_active);
+                }
+                if (historyRes) setHistory(historyRes);
+                if (challengeRes) setChallengeText(challengeRes);
             }
-            if (historyRes) setHistory(historyRes);
-            if (challengeRes) setChallengeText(challengeRes);
+        } catch (err) {
+            // console.warn("Fetch error:", err);
+        } finally {
+            setLoading(false);
+            isFetching.current = false;
         }
-        setLoading(false);
     }, []);
 
 
@@ -128,8 +104,12 @@ export default function DashboardScreen({ session }: { session: any }) {
 
         // POLL EVERY 5 SECONDS (for faster testing)
         const timer = setInterval(() => {
-            console.log("⏱️ Polling Dashboard...");
-            fetchData(true);
+            if (!isFetching.current) {
+                console.log("⏱️ Polling Dashboard...");
+                fetchData(true);
+            } else {
+                console.log("⏳ Skipping poll (busy)...");
+            }
         }, 5000);
 
         return () => {
@@ -234,19 +214,27 @@ export default function DashboardScreen({ session }: { session: any }) {
                     <View style={styles.mainContentRow}>
                         <View style={styles.contentColumn}>
 
-                            {/* Debug Button Removed */}
 
-                            {/* Nudge Banner Removed - using Modal instead */}
+                            {/* 1. THE HOST (Zippy) */}
+                            <ZippyMascot
+                                status={
+                                    data.status === 'SAFE' ? 'SAFE' :
+                                        (data.user_completed_today ? 'SLEEPING' : 'AT_RISK')
+                                }
+                            />
 
-                            <StatusCard status={data.status} />
-
-                            <HistoryCalendar history={history} />
-
+                            {/* 2. THE MISSION (Challenge) - Moved to Top */}
                             <ChallengeOfTheDay
                                 challengeText={challengeText}
                                 onComplete={handleWorkout}
                                 isCompleted={data.user_completed_today}
                             />
+
+                            {/* 3. THE PATH (Journal) */}
+                            <JourneyMap history={history} />
+
+                            {/* 4. THE STATUS (Details) */}
+                            <StatusCard status={data.status} />
                         </View>
                     </View>
                 </ScrollView>
@@ -280,23 +268,31 @@ const styles = StyleSheet.create({
     headerTitle: { fontWeight: '900', color: '#B0B0B0', fontSize: 13, letterSpacing: 3 },
     statPill: { flexDirection: 'row', alignItems: 'center' },
     statText: { fontSize: 24, fontWeight: '900', marginLeft: 5 },
-    scrollContent: { padding: 20, paddingBottom: 110 },
-    mainContentRow: { flexDirection: 'row', justifyContent: 'center', gap: 15, width: '100%' },
+    scrollContent: { padding: 16, paddingBottom: 110 },
+    mainContentRow: { flexDirection: 'row', justifyContent: 'center', gap: 10, width: '100%' },
     contentColumn: { flex: 1, maxWidth: 380 },
-    activeZone: { height: '100%', padding: 20, backgroundColor: 'white', borderRadius: 24, borderWidth: 2, borderColor: '#E5E5E5', alignItems: 'center', justifyContent: 'center' },
-    todayText: { fontWeight: '900', fontSize: 18, color: '#4B4B4B', marginBottom: 15 },
-    topInfoRow: { flexDirection: 'row', justifyContent: 'center', gap: 12, marginBottom: 20 },
+    activeZone: {
+        height: '100%',
+        padding: 16,
+        // Solid Style (Clean White)
+        backgroundColor: 'rgba(255, 255, 255, 0.6)',
+        borderRadius: 32,
+        alignItems: 'center',
+        justifyContent: 'center'
+    },
+    todayText: { fontWeight: '900', fontSize: 18, color: '#4B4B4B', marginBottom: 10 },
+    topInfoRow: { flexDirection: 'row', justifyContent: 'center', gap: 10, marginBottom: 10 },
 
-    // Floating Pills
+    // Floating Pills (Solid)
     pillContainer: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: '#fff', // White pop
+        backgroundColor: '#fff', // Pure white
         paddingVertical: 12,
-        paddingHorizontal: 16,
-        borderRadius: 24,
+        paddingHorizontal: 20,
+        borderRadius: 30,
         gap: 8,
-        // Shadow / Elevation
+        // Soft Shadow
         shadowColor: "#000",
         shadowOffset: { width: 0, height: 4 },
         shadowOpacity: 0.1,
