@@ -38,11 +38,13 @@ export default function OnboardingScreen({ token, onSuccess }: OnboardingProps) 
             if (Platform.OS === 'web') {
                 window.alert(successMsg);
             } else {
-                Alert.alert("Success", successMsg);
+                Alert.alert("Success", successMsg, [
+                    { text: "OK", onPress: onSuccess }
+                ]);
             }
 
             console.log("✅ Calling onSuccess()...");
-            onSuccess(); // This refreshes the Dashboard
+            // onSuccess(); // Now called via Alert
         }
     }
 
@@ -60,8 +62,9 @@ export default function OnboardingScreen({ token, onSuccess }: OnboardingProps) 
         if (res.error) {
             Alert.alert("Error", res.error);
         } else {
-            Alert.alert("Joined!", "You are now linked with your partner.");
-            onSuccess();
+            Alert.alert("Joined!", "You are now linked with your partner.", [
+                { text: "OK", onPress: onSuccess }
+            ]);
         }
     }
 
