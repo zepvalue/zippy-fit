@@ -1,5 +1,6 @@
 import React from 'react';
 import { View, StyleSheet, ViewStyle, Platform } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 
 interface ContainerProps {
     children: React.ReactNode;
@@ -8,11 +9,15 @@ interface ContainerProps {
 
 export default function Container({ children, style }: ContainerProps) {
     return (
-        <View style={styles.outerBackground}>
+        <LinearGradient
+            // A subtle, fresh gradient: Very light warm tint fading to white
+            colors={['#FFF8F0', '#FFFFFF']}
+            style={styles.outerBackground}
+        >
             <View style={[styles.constrainedContent, style]}>
                 {children}
             </View>
-        </View>
+        </LinearGradient>
     );
 }
 
@@ -21,7 +26,6 @@ const styles = StyleSheet.create({
         flex: 1,
         width: '100%',
         alignItems: 'center',
-        backgroundColor: '#fff',
     },
     constrainedContent: {
         flex: 1,

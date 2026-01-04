@@ -1,6 +1,7 @@
-import React, { useMemo } from 'react';
+import React, { useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import Animated, { useSharedValue, useAnimatedStyle, withSpring, withSequence, withTiming } from 'react-native-reanimated';
 
 interface ChallengeOfTheDayProps {
     challengeText: string;
@@ -8,27 +9,68 @@ interface ChallengeOfTheDayProps {
     isCompleted: boolean;
 }
 
-export default function ChallengeOfTheDay({ challengeText, onComplete, isCompleted }: ChallengeOfTheDayProps) {
+const AnimatedTouchableOpacity = Animated.createAnimatedComponent(TouchableOpacity);
 
+export default function ChallengeOfTheDay({ challengeText, onComplete, isCompleted }: ChallengeOfTheDayProps) {
+    const scale = useSharedValue(1);
+    const iconScale = useSharedValue(1);
+
+    const buttonStyle = useAnimatedStyle(() => {
+        return {
+            transform: [{ scale: scale.value }]
+        };
+    });
+
+    const iconStyle = useAnimatedStyle(() => {
+        return {
+            transform: [{ scale: iconScale.value }]
+        };
+    });
+
+    useEffect(() => {
+        if (isCompleted) {
+            // Pulse the icon once explicitly when completed
+            iconScale.value = withSequence(
+                withTiming(1.5, { duration: 200 }),
+                withSpring(1)
+            );
+        }
+    }, [isCompleted]);
+
+    const handlePress = () => {
+        if (isCompleted) return;
+
+        // Button bounce
+        scale.value = withSequence(
+            withTiming(0.9, { duration: 100 }),
+            withTiming(1, { duration: 100 }),
+            withTiming(1, { duration: 0 }) // ensure reset
+        );
+
+        onComplete();
+    };
 
     return (
         <View style={styles.container}>
             <View style={styles.header}>
-                <MaterialCommunityIcons name="trophy" size={24} color="#FF9600" />
+                <Animated.View style={iconStyle}>
+                    <MaterialCommunityIcons name="trophy" size={24} color={isCompleted ? "#FFD700" : "#FF9600"} />
+                </Animated.View>
                 <Text style={styles.title}>CHALLENGE OF THE DAY</Text>
             </View>
 
             <Text style={styles.challengeText}>{challengeText}</Text>
 
-            <TouchableOpacity
-                style={[styles.button, isCompleted && styles.buttonCompleted]}
-                onPress={onComplete}
+            <AnimatedTouchableOpacity
+                style={[styles.button, isCompleted && styles.buttonCompleted, buttonStyle]}
+                onPress={handlePress}
                 disabled={isCompleted}
+                activeOpacity={0.8}
             >
                 <Text style={[styles.buttonText, isCompleted && styles.buttonTextCompleted]}>
                     {isCompleted ? "COMPLETED ✅" : "MARK COMPLETE"}
                 </Text>
-            </TouchableOpacity>
+            </AnimatedTouchableOpacity>
         </View>
     );
 }
@@ -37,9 +79,13 @@ const styles = StyleSheet.create({
     container: {
         backgroundColor: '#fff',
         borderRadius: 24,
-        borderWidth: 2,
-        borderColor: '#E5E5E5',
-        padding: 20,
+        // Removed heavy border, added shadow
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.1,
+        shadowRadius: 10,
+        elevation: 5,
+        padding: 24, // More breathing room
         marginTop: 20,
         width: '100%',
         alignItems: 'center',
@@ -47,39 +93,45 @@ const styles = StyleSheet.create({
     header: {
         flexDirection: 'row',
         alignItems: 'center',
-        marginBottom: 10,
+        marginBottom: 15,
         gap: 8,
     },
     title: {
         fontWeight: '900',
-        color: '#CECECE',
+        color: '#B0B0B0', // Softer grey
         fontSize: 14,
         letterSpacing: 2,
     },
     challengeText: {
-        fontSize: 18,
+        fontSize: 20, // Slightly larger
         fontWeight: 'bold',
         color: '#4B4B4B',
         textAlign: 'center',
-        marginBottom: 20,
+        marginBottom: 24,
+        lineHeight: 28,
     },
     button: {
-        paddingVertical: 12,
+        paddingVertical: 14, // Taller button
         paddingHorizontal: 24,
         borderRadius: 16,
         backgroundColor: '#58CC02',
-        borderBottomWidth: 4,
-        borderBottomColor: '#46A302', // darker green
+        // Removed hard border for cleaner look, or keep subtle one
+        shadowColor: "#58CC02",
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.3,
+        shadowRadius: 5,
+        elevation: 4,
         width: '100%',
         alignItems: 'center',
     },
     buttonCompleted: {
-        backgroundColor: '#E5E5E5',
-        borderBottomColor: '#D4D4D4',
+        backgroundColor: '#F0F0F0',
+        shadowOpacity: 0,
+        elevation: 0,
     },
     buttonText: {
         color: 'white',
-        fontSize: 14,
+        fontSize: 16,
         fontWeight: '900',
         letterSpacing: 1,
     },
@@ -87,3 +139,4 @@ const styles = StyleSheet.create({
         color: '#AFAFAF',
     }
 });
+
