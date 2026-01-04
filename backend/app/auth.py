@@ -1,7 +1,7 @@
 # backend/app/auth.py
 from fastapi import HTTPException, Security, Depends
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from supabase import create_client, Client
+from supabase import create_client, Client, ClientOptions
 import os
 from dotenv import load_dotenv
 
@@ -45,14 +45,13 @@ def get_authenticated_client(credentials: HTTPAuthorizationCredentials = Securit
         user_id = user_response.user.id
         
         # 2. Create Scoped Client
-        # We assume supabase-py supports the 'headers' override in ClientOptions or simply pass it to postgrest.
-        # However, re-creating the client is the safest way to ensure state isolation.
-        
-        # Note: If 'key' is the ANON key, we just add the Authorization header.
-        scoped_client = create_client(url, key, options={'headers': {'Authorization': f'Bearer {token}'}})
+        # Use ClientOptions to pass headers correctly
+        opts = ClientOptions(headers={'Authorization': f'Bearer {token}'})
+        scoped_client = create_client(url, key, options=opts)
         
         return user_id, scoped_client
 
     except Exception as e:
         print(f"Auth Error (Scoped): {e}")
         raise HTTPException(status_code=401, detail="Invalid or expired token")
+
