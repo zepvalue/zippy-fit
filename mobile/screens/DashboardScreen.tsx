@@ -93,8 +93,10 @@ export default function DashboardScreen({ session }: { session: any }) {
 
         const token = await getFreshToken();
         if (token) {
+            setInitialToken(token); // Store token for OnboardingScreen to use
             const result = await api.getDashboard(token);
             if (result) {
+                setHasTeam(result.has_team); // Update hasTeam state
                 setData({ ...result }); // Overwrite with truth from server
                 console.log("DEBUG: Nudge Active from server:", result.nudge_active);
                 setNudgeActive(!!result.nudge_active);
