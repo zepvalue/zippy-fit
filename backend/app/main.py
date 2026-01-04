@@ -30,6 +30,15 @@ def create_team(user_id: str = Depends(get_current_user)):
     # 1. Check if user is already in a team
     user_data = supabase.table("profiles").select("team_id").eq("id", user_id).execute()
     
+    # --- SELF-HEALING: Create Profile if missing ---
+    if not user_data.data:
+        print(f"🛠️ FIX: Creating missing profile for {user_id}")
+        # Insert minimal profile so we can proceed
+        supabase.table("profiles").insert({"id": user_id}).execute()
+        # Re-fetch (should be empty team_id)
+        user_data = supabase.table("profiles").select("team_id").eq("id", user_id).execute()
+    # -----------------------------------------------
+
     # If the profile exists AND has a team_id
     if user_data.data and user_data.data[0].get('team_id'):
          raise HTTPException(status_code=400, detail="You are already in a team!")
@@ -50,8 +59,8 @@ def create_team(user_id: str = Depends(get_current_user)):
 
     # 4. CRITICAL CHECK: Did the update work?
     if not update_response.data:
-        print(f"🚨 ERROR: User {user_id} has no profile row!")
-        # If we hit this, it means you haven't run the SQL script yet.
+        # Should not happen now due to self-healing above
+        print(f"🚨 ERROR: User {user_id} has no profile row even after fix attempt!")
         raise HTTPException(
             status_code=500, 
             detail="Profile missing. Please run the SQL fix in Supabase."
@@ -77,7 +86,13 @@ def join_team(req: JoinRequest, user_id: str = Depends(get_current_user)):
         raise HTTPException(status_code=400, detail="Team is full!")
 
     # 3. Join the team
-    # 3. Join the team
+    # --- SELF-HEALING: Ensure profile exists before update ---
+    user_data = supabase.table("profiles").select("id").eq("id", user_id).execute()
+    if not user_data.data:
+         print(f"🛠️ FIX: Creating missing profile for {user_id} (Join Flow)")
+         supabase.table("profiles").insert({"id": user_id}).execute()
+    # ---------------------------------------------------------
+
     supabase.table("profiles").update({"team_id": team_id}).eq("id", user_id).execute()
 
     # 4. Clear any stale nudges so the new user isn't bombarded
