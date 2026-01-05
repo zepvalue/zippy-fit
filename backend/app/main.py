@@ -213,11 +213,16 @@ def get_dashboard(auth: tuple = Depends(get_authenticated_client)):
         if (datetime.now(timezone.utc) - nudge_dt).days < 1:
             nudge_active = True
 
+    # --- MEMBER COUNT CHECK ---
+    members_req = client.table("profiles").select("id", count="exact").eq("team_id", team_id).execute()
+    member_count = members_req.count if members_req.count else len(members_req.data)
+
     return {
         "team_id": str(team_id),
         "has_team": True,
         "team_name": team_data['name'],
         "code": team_data['code'],
+        "member_count": member_count,         # <--- NEW
         "hearts": team_data['hearts'],        # Now reflects the decay
         "streak": team_data['streak'],        # Now reflects the reset
         "status": team_status,

@@ -73,11 +73,18 @@ export default function OnboardingScreen({ token, onSuccess }: OnboardingProps) 
     return (
         <Container style={{ justifyContent: 'center' }}>
             <View>
-                <Image
-                    source={require('../assets/mascot_happy.png')}
-                    style={{ width: 120, height: 120, alignSelf: 'center', marginBottom: 20 }}
-                    resizeMode="contain"
-                />
+                <View style={{
+                    width: 150, height: 150, borderRadius: 75, backgroundColor: '#F9F9F9',
+                    justifyContent: 'center', alignItems: 'center', alignSelf: 'center', marginBottom: 20,
+                    shadowColor: "#000", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.1, shadowRadius: 4, elevation: 3,
+                    // Removed overflow: 'hidden' to prevent clipping animation
+                }}>
+                    <Image
+                        source={require('../assets/animations/happy_zippy_animated.gif')}
+                        style={{ width: 110, height: 110 }}
+                        resizeMode="contain"
+                    />
+                </View>
                 <Text style={styles.title}>RECRUIT YOUR PARTNER</Text>
                 <Text style={styles.subtitle}>Fitness is a team sport. Find your duo and start your streak!</Text>
             </View>

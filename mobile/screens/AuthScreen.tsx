@@ -41,17 +41,38 @@ export default function AuthScreen() {
             });
             if (error) Alert.alert("Login Failed", getErrorMessage(error));
         } else {
-            // SIGN UP
-            const { error } = await supabase.auth.signUp({
+            // SIGN UP FLOW
+            // 1. Try to Log In first (in case they essentially deleted data but are still in Auth system)
+            console.log("🔹 Attempting check for existing user...");
+            const { data: loginData, error: loginError } = await supabase.auth.signInWithPassword({
+                email: email,
+                password: password,
+            });
+
+            if (loginData.session) {
+                console.log("✅ User exists! Auto-logging in...");
+                Alert.alert("Welcome Back!", "You already had an account, so we logged you in.");
+                return; // Stop here, session listener will handle redirect
+            }
+
+            // 2. If Login failed, proceed with actual Sign Up
+            console.log("🔹 Creating new user...");
+            const { data, error } = await supabase.auth.signUp({
                 email: email,
                 password: password,
                 options: { emailRedirectTo: 'zippyfit://auth-callback' }
             });
+
             if (error) {
+                // Hide "User already registered" error if possible, but usually handled by login check above
                 Alert.alert("Signup Failed", getErrorMessage(error));
+            } else if (data.session) {
+                console.log("✅ Signup returned session (Immediate Verify).");
+                Alert.alert("Welcome!", "Account created and verified.");
             } else {
+                console.log("⏳ Verification Email Sent.");
                 Alert.alert("Check your inbox!", "We sent you a verification link.");
-                setIsLogin(true); // Switch back to login after signup attempt
+                setIsLogin(true);
             }
         }
         setLoading(false);
@@ -59,11 +80,18 @@ export default function AuthScreen() {
 
     return (
         <Container style={{ justifyContent: 'center' }}>
-            <Image
-                source={require('../assets/mascot_happy.png')}
-                style={{ width: 120, height: 120, alignSelf: 'center', marginBottom: 10 }}
-                resizeMode="contain"
-            />
+            <View style={{
+                width: 150, height: 150, borderRadius: 75, backgroundColor: '#F9F9F9',
+                justifyContent: 'center', alignItems: 'center', alignSelf: 'center', marginBottom: 10,
+                shadowColor: "#000", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.1, shadowRadius: 4, elevation: 3,
+                // Removed overflow: 'hidden' to prevent clipping animation
+            }}>
+                <Image
+                    source={require('../assets/animations/happy_zippy_animated.gif')}
+                    style={{ width: 110, height: 110 }}
+                    resizeMode="contain"
+                />
+            </View>
             <Text style={styles.title}> ZippyFit </Text>
 
             <View style={styles.inputContainer}>

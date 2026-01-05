@@ -2,7 +2,7 @@ import React, { useEffect, useState, useCallback, useRef } from 'react';
 import {
     View, Text, StyleSheet, ScrollView, RefreshControl, Alert,
     useWindowDimensions, TouchableOpacity, Modal, TouchableWithoutFeedback,
-    Platform, AppState, Vibration
+    Platform, AppState, Vibration, ActivityIndicator
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
@@ -43,12 +43,35 @@ export default function DashboardScreen({ session }: { session: any }) {
         user_completed_today: false,
         partner_completed_today: false,
         code: '????',
-        nudge_at: null as string | null
+        nudge_at: null as string | null,
+        member_count: 2 // Default to 2 so we don't show warning while loading
     });
 
     // REFRESHED LOGIC: This only shows SAFE if the partner is truly READY
 
     const [challengeText, setChallengeText] = useState("Loading challenge...");
+
+    // --- DEBUG MENU STATE ---
+    const [devMenuVisible, setDevMenuVisible] = useState(false);
+    const [debugStatus, setDebugStatus] = useState<'SAFE' | 'AT_RISK' | 'SLEEPING' | null>(null);
+    const lastTap = useRef(0);
+    const tapCount = useRef(0);
+
+    const handleDebugTap = () => {
+        const now = Date.now();
+        if (now - lastTap.current < 500) {
+            tapCount.current += 1;
+        } else {
+            tapCount.current = 1;
+        }
+        lastTap.current = now;
+
+        if (tapCount.current === 3) {
+            setDevMenuVisible(true);
+            tapCount.current = 0;
+            Vibration.vibrate(50);
+        }
+    };
 
     const getFreshToken = async () => {
         const { data: { session: currentSession } } = await supabase.auth.getSession();
@@ -80,6 +103,15 @@ export default function DashboardScreen({ session }: { session: any }) {
                 ]);
 
                 if (dashboardRes) {
+
+                    // --- HANDLE DELETED USER / EXPIRED SESSION ---
+                    if (dashboardRes.error === 'AUTH_ERROR') {
+                        console.log("🚨 Auth Error detected in Dashboard. Signing out...");
+                        await supabase.auth.signOut();
+                        // Layout/_layout should handle the redirect to index
+                        return;
+                    }
+
                     setHasTeam(dashboardRes.has_team);
 
                     // Check for Tutorial
@@ -178,6 +210,15 @@ export default function DashboardScreen({ session }: { session: any }) {
         console.log("🔔 Nudge API Result:", success);
     }
 
+    if (hasTeam === null) {
+        return (
+            <Container style={{ justifyContent: 'center', alignItems: 'center' }}>
+                <ActivityIndicator size="large" color="#58CC02" />
+                <Text style={{ marginTop: 20, color: '#B0B0B0', fontWeight: 'bold' }}>Loading ZippyFit...</Text>
+            </Container>
+        );
+    }
+
     if (hasTeam === false && initialToken) {
         return <OnboardingScreen token={initialToken} onSuccess={() => fetchData()} />;
     }
@@ -217,7 +258,9 @@ export default function DashboardScreen({ session }: { session: any }) {
                         <MaterialCommunityIcons name="heart" size={24} color="#FF4B4B" />
                         <Text style={[styles.statText, { color: '#FF4B4B' }]}> {data.hearts}</Text>
                     </View>
-                    <Text style={styles.headerTitle}>SHARED FATE</Text>
+                    <TouchableOpacity activeOpacity={1} onPress={handleDebugTap}>
+                        <Text style={styles.headerTitle}>SHARED FATE</Text>
+                    </TouchableOpacity>
                     <View style={styles.statPill}>
                         <Text style={[styles.statText, { color: '#FF9600' }]}>{data.streak} 🔥</Text>
                     </View>
@@ -229,17 +272,27 @@ export default function DashboardScreen({ session }: { session: any }) {
                 >
                     <View style={styles.topInfoRow}>
                         {/* Note: Code widget moved to Profile */}
-                        <View style={[styles.pillContainer, { borderColor: data.partner_completed_today ? '#58CC02' : '#E5E5E5' }]}>
-                            <Text style={styles.pillLabel}>PARTNER:</Text>
-                            <Text style={[styles.pillValue, { color: data.partner_completed_today ? '#58CC02' : '#CECECE' }]}>
-                                {data.partner_completed_today ? "READY ✅" : "SLEEPING 😴"}
-                            </Text>
-                            {!data.partner_completed_today && (
-                                <TouchableOpacity onPress={handleNudge} style={{ marginLeft: 5 }}>
-                                    <MaterialCommunityIcons name="bell-ring" size={18} color="#FF9600" />
-                                </TouchableOpacity>
-                            )}
-                        </View>
+                        {data.member_count < 2 ? (
+                            <TouchableOpacity
+                                style={[styles.pillContainer, { borderColor: '#FF9600', backgroundColor: '#FFF5E5' }]}
+                                onPress={() => setShowProfile(true)}
+                            >
+                                <Text style={[styles.pillLabel, { color: '#FF9600' }]}>WAITING FOR PARTNER</Text>
+                                <Text style={[styles.pillValue, { color: '#FF9600', fontSize: 13 }]}>TAP TO INVITE ✉️</Text>
+                            </TouchableOpacity>
+                        ) : (
+                            <View style={[styles.pillContainer, { borderColor: data.partner_completed_today ? '#58CC02' : '#E5E5E5' }]}>
+                                <Text style={styles.pillLabel}>PARTNER:</Text>
+                                <Text style={[styles.pillValue, { color: data.partner_completed_today ? '#58CC02' : '#CECECE' }]}>
+                                    {data.partner_completed_today ? "READY ✅" : "SLEEPING 😴"}
+                                </Text>
+                                {!data.partner_completed_today && (
+                                    <TouchableOpacity onPress={handleNudge} style={{ marginLeft: 5 }}>
+                                        <MaterialCommunityIcons name="bell-ring" size={18} color="#FF9600" />
+                                    </TouchableOpacity>
+                                )}
+                            </View>
+                        )}
                     </View>
 
                     <View style={styles.mainContentRow}>
@@ -249,8 +302,10 @@ export default function DashboardScreen({ session }: { session: any }) {
                             {/* 1. THE HOST (Zippy) */}
                             <ZippyMascot
                                 status={
-                                    data.status === 'SAFE' ? 'SAFE' :
-                                        (data.user_completed_today ? 'SLEEPING' : 'AT_RISK')
+                                    debugStatus || (
+                                        data.status === 'SAFE' ? 'SAFE' :
+                                            (data.user_completed_today ? 'SLEEPING' : 'AT_RISK')
+                                    )
                                 }
                             />
 
@@ -289,6 +344,38 @@ export default function DashboardScreen({ session }: { session: any }) {
                     }
                 }}
             />
+
+            {/* DEBUG MENU MODAL */}
+            <Modal transparent visible={devMenuVisible} animationType="slide">
+                <View style={styles.debugOverlay}>
+                    <View style={styles.debugCard}>
+                        <Text style={styles.debugTitle}>🛠️ DEV MENU</Text>
+                        <Text style={styles.debugSubtitle}>Force Mascot State:</Text>
+
+                        <View style={styles.debugRow}>
+                            <TouchableOpacity style={[styles.debugBtn, { backgroundColor: '#58CC02' }]} onPress={() => setDebugStatus('SAFE')}>
+                                <Text style={styles.debugBtnText}>SAFE (Happy)</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity style={[styles.debugBtn, { backgroundColor: '#FF4B4B' }]} onPress={() => setDebugStatus('AT_RISK')}>
+                                <Text style={styles.debugBtnText}>RISK (Sad)</Text>
+                            </TouchableOpacity>
+                        </View>
+                        <View style={styles.debugRow}>
+                            <TouchableOpacity style={[styles.debugBtn, { backgroundColor: '#808080' }]} onPress={() => setDebugStatus('SLEEPING')}>
+                                <Text style={styles.debugBtnText}>SLEEP (Sleepy)</Text>
+                            </TouchableOpacity>
+                        </View>
+
+                        <TouchableOpacity style={[styles.debugBtn, { backgroundColor: '#333', marginTop: 15 }]} onPress={() => setDebugStatus(null)}>
+                            <Text style={styles.debugBtnText}>RESET (Real API Data)</Text>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity style={[styles.debugBtn, { backgroundColor: 'transparent', marginTop: 10 }]} onPress={() => setDevMenuVisible(false)}>
+                            <Text style={[styles.debugBtnText, { color: '#888' }]}>CLOSE</Text>
+                        </TouchableOpacity>
+                    </View>
+                </View>
+            </Modal>
         </Container >
     );
 }
@@ -373,5 +460,14 @@ const styles = StyleSheet.create({
         marginBottom: 20,
         gap: 8
     },
-    nudgeText: { color: 'white', fontWeight: 'bold', fontSize: 14, letterSpacing: 1 }
+    nudgeText: { color: 'white', fontWeight: 'bold', fontSize: 14, letterSpacing: 1 },
+
+    // Debug Menu Styles
+    debugOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' },
+    debugCard: { width: 300, backgroundColor: 'white', borderRadius: 20, padding: 20, alignItems: 'center', elevation: 10 },
+    debugTitle: { fontSize: 20, fontWeight: '900', marginBottom: 10 },
+    debugSubtitle: { fontSize: 14, color: '#888', marginBottom: 15 },
+    debugRow: { flexDirection: 'row', gap: 10, marginBottom: 10 },
+    debugBtn: { paddingVertical: 10, paddingHorizontal: 15, borderRadius: 8, minWidth: 100, alignItems: 'center' },
+    debugBtnText: { color: 'white', fontWeight: 'bold' }
 });

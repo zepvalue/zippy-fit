@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { View, Image, StyleSheet, Text } from 'react-native';
-import Animated, { useSharedValue, useAnimatedStyle, withRepeat, withTiming, withSequence, Easing, withDelay, FadeIn, FadeOut } from 'react-native-reanimated';
+import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
 // import Confetti from './Confetti'; // Removed per user request
 
 interface ZippyMascotProps {
@@ -14,22 +14,18 @@ const MESSAGES = {
 };
 
 export default function ZippyMascot({ status }: ZippyMascotProps) {
-    const translateY = useSharedValue(0);
-    const rotate = useSharedValue(0);
-    const scale = useSharedValue(1);
-
     // Dynamic Image Selection
     let source;
     switch (status) {
         case 'SAFE':
-            source = require('../../assets/mascot_happy.png');
+            source = require('../../assets/animations/happy_zippy_animated.gif');
             break;
         case 'SLEEPING': // Partner not done
-            source = require('../../assets/mascot_sleeping.png');
+            source = require('../../assets/animations/sleepy_zippy_animated.gif');
             break;
         case 'AT_RISK':
         default:
-            source = require('../../assets/mascot_sad.png');
+            source = require('../../assets/animations/worried_zippy_animated.gif');
             break;
     }
 
@@ -42,60 +38,8 @@ export default function ZippyMascot({ status }: ZippyMascotProps) {
         setMessage(options[Math.floor(Math.random() * options.length)]);
     }, [status]);
 
-    // Animation Logic
-    useEffect(() => {
-        if (status === 'SAFE') {
-            // Happy Jump (Bouncier)
-            scale.value = withTiming(1);
-            translateY.value = withRepeat(
-                withSequence(
-                    withTiming(-25, { duration: 350, easing: Easing.out(Easing.quad) }),
-                    withTiming(0, { duration: 350, easing: Easing.in(Easing.quad) }),
-                    withTiming(-10, { duration: 200, easing: Easing.out(Easing.quad) }), // Double hop
-                    withTiming(0, { duration: 200, easing: Easing.in(Easing.quad) }),
-                    withTiming(0, { duration: 800 }) // Pause
-                ),
-                -1,
-                true
-            );
-            rotate.value = withTiming(0);
-        } else if (status === 'AT_RISK') {
-            // Sad/Nervous (Slow Tremble)
-            scale.value = withTiming(0.95); // Shrink slightly in fear
-            translateY.value = withTiming(0);
-            rotate.value = withRepeat(
-                withSequence(
-                    withTiming(-3, { duration: 150 }),
-                    withTiming(3, { duration: 150 })
-                ),
-                -1,
-                true
-            );
-        } else {
-            // Sleeping (Deep Breathing)
-            rotate.value = withTiming(0);
-            translateY.value = withTiming(0);
-            // Breathe: Scale up/down slowly
-            scale.value = withRepeat(
-                withSequence(
-                    withTiming(1.08, { duration: 2000, easing: Easing.inOut(Easing.quad) }),
-                    withTiming(1, { duration: 2000, easing: Easing.inOut(Easing.quad) })
-                ),
-                -1,
-                true
-            );
-        }
-    }, [status]);
-
-    const animatedStyle = useAnimatedStyle(() => {
-        return {
-            transform: [
-                { translateY: translateY.value },
-                { rotate: `${rotate.value}deg` },
-                { scale: scale.value }
-            ]
-        };
-    });
+    // Dynamic Background Color (Happy GIF is off-white, others are transparent/white)
+    const containerColor = status === 'SAFE' ? '#F9F9F9' : 'white';
 
     return (
         <View style={styles.container}>
@@ -110,11 +54,18 @@ export default function ZippyMascot({ status }: ZippyMascotProps) {
                 <View style={styles.bubbleArrow} />
             </Animated.View>
 
-            <Animated.Image
-                source={source}
-                style={[styles.image, animatedStyle]}
-                resizeMode="contain"
-            />
+            <View style={{
+                width: 280, height: 280, borderRadius: 140, backgroundColor: containerColor,
+                justifyContent: 'center', alignItems: 'center',
+                shadowColor: "#000", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.1, shadowRadius: 10, elevation: 5,
+                // Removed overflow: 'hidden' to prevent clipping animation
+            }}>
+                <Image
+                    source={source}
+                    style={{ width: 220, height: 220 }}
+                    resizeMode="contain"
+                />
+            </View>
         </View>
     );
 }

@@ -34,6 +34,12 @@ export const api = {
             const response = await fetchWithTimeout(`${BASE_URL}/dashboard?t=${Date.now()}`, {
                 headers: getHeaders(token)
             });
+
+            if (response.status === 401 || response.status === 403) {
+                console.log("🚨 API: Auth Error (401/403) - User likely deleted.");
+                return { error: 'AUTH_ERROR' };
+            }
+
             if (!response.ok) throw new Error("Server error");
 
             const data = await response.json();
