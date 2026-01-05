@@ -129,5 +129,23 @@ export const api = {
             console.error("🔴 API: Nudge Failed:", error);
             return false;
         }
+    },
+
+    getChallenge: async (token: string) => {
+        try {
+            const response = await fetch(`${BASE_URL}/challenge?t=${getTodayStr()}`, {
+                method: 'GET',
+                headers: getHeaders(token),
+            });
+            const data = await response.json();
+            return data.text || "No challenge found";
+        } catch (error) {
+            console.error("🔴 API Error (getChallenge):", error);
+            return "Check your connection";
+        }
     }
 };
+
+function getTodayStr() {
+    return new Date().toISOString().split('T')[0];
+}

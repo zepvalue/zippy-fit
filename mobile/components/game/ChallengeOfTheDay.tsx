@@ -2,42 +2,14 @@ import React, { useMemo } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 
-const CHALLENGES = [
-    "Do 20 pushups",
-    "Drink 2L of water",
-    "Walk 10,000 steps",
-    "Do 50 jumping jacks",
-    "Hold a plank for 1 minute",
-    "Stretch for 10 minutes",
-    "Eat a piece of fruit",
-    "Do 15 squats",
-    "Take the stairs today",
-    "No sugar for the rest of the day",
-    "Do 20 lunges",
-    "Meditate for 5 minutes",
-    "Stand up every hour",
-    "Go for a 15 minute walk",
-    "Do 10 burpees"
-];
-
 interface ChallengeOfTheDayProps {
+    challengeText: string;
     onComplete: () => void;
     isCompleted: boolean;
 }
 
-export default function ChallengeOfTheDay({ onComplete, isCompleted }: ChallengeOfTheDayProps) {
-    // Memoize the challenge so it doesn't change on re-renders, 
-    // but updates if the day changes (though in a single session it likely won't).
-    const challenge = useMemo(() => {
-        // Simple hash of the date string to pick a challenge
-        const dateStr = new Date().toDateString(); // "Fri Dec 28 2025"
-        let hash = 0;
-        for (let i = 0; i < dateStr.length; i++) {
-            hash = dateStr.charCodeAt(i) + ((hash << 5) - hash);
-        }
-        const index = Math.abs(hash) % CHALLENGES.length;
-        return CHALLENGES[index];
-    }, []);
+export default function ChallengeOfTheDay({ challengeText, onComplete, isCompleted }: ChallengeOfTheDayProps) {
+
 
     return (
         <View style={styles.container}>
@@ -46,7 +18,7 @@ export default function ChallengeOfTheDay({ onComplete, isCompleted }: Challenge
                 <Text style={styles.title}>CHALLENGE OF THE DAY</Text>
             </View>
 
-            <Text style={styles.challengeText}>{challenge}</Text>
+            <Text style={styles.challengeText}>{challengeText}</Text>
 
             <TouchableOpacity
                 style={[styles.button, isCompleted && styles.buttonCompleted]}

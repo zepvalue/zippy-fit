@@ -276,3 +276,29 @@ def send_nudge(auth: tuple = Depends(get_authenticated_client)):
     }).eq("id", team_id).execute()
     
     return {"message": "Nudge sent!"}
+
+# --- NEW: Challenge Endpoint ---
+@app.get("/challenge")
+def get_challenge(auth: tuple = Depends(get_authenticated_client)):
+    user_id, client = auth
+    today_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+
+    # 1. Try to fetch specific challenge for today
+    specific = client.table("challenges").select("text").eq("date", today_str).execute()
+    
+    if specific.data:
+        return {"text": specific.data[0]['text']}
+    
+    # 2. Fallback: Get a random one from the pool (where date is null)
+    pool = client.table("challenges").select("text").is_("date", "null").execute()
+    
+    if pool.data:
+        # Use a stable hash of the date so all users see the SAME fallback challenge today
+        hash_val = 0
+        for char in today_str:
+            hash_val = ord(char) + ((hash_val << 5) - hash_val)
+        
+        index = abs(hash_val) % len(pool.data)
+        return {"text": pool.data[index]['text']}
+    
+    return {"text": "No challenge available today!"}
