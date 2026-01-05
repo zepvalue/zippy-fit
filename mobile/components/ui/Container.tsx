@@ -1,6 +1,7 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { View, StyleSheet, ViewStyle, Platform } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import Animated, { useSharedValue, withRepeat, withTiming, Easing, useAnimatedStyle } from 'react-native-reanimated';
 
 interface ContainerProps {
     children: React.ReactNode;
@@ -8,6 +9,37 @@ interface ContainerProps {
 }
 
 export default function Container({ children, style }: ContainerProps) {
+    const sv = useSharedValue(0);
+
+    useEffect(() => {
+        sv.value = withRepeat(
+            withTiming(1, { duration: 5000, easing: Easing.inOut(Easing.ease) }),
+            -1, // infinite
+            true // reverse
+        );
+    }, [sv]);
+
+    const blob1Style = useAnimatedStyle(() => ({
+        transform: [
+            { scale: 1 + sv.value * 0.1 },
+            { translateY: sv.value * 10 }
+        ]
+    }));
+
+    const blob2Style = useAnimatedStyle(() => ({
+        transform: [
+            { scale: 1 + (1 - sv.value) * 0.1 },
+            { translateY: (1 - sv.value) * -10 }
+        ]
+    }));
+
+    const blob3Style = useAnimatedStyle(() => ({
+        transform: [
+            { scale: 1 + sv.value * 0.15 },
+            { rotate: `${sv.value * 10}deg` }
+        ]
+    }));
+
     return (
         <LinearGradient
             // Warmer, softer gradient base
@@ -16,9 +48,9 @@ export default function Container({ children, style }: ContainerProps) {
         >
             {/* Background Blobs */}
             <View style={styles.blobContainer} pointerEvents="none">
-                <View style={[styles.blob, styles.blob1]} />
-                <View style={[styles.blob, styles.blob2]} />
-                <View style={[styles.blob, styles.blob3]} />
+                <Animated.View style={[styles.blob, styles.blob1, blob1Style]} />
+                <Animated.View style={[styles.blob, styles.blob2, blob2Style]} />
+                <Animated.View style={[styles.blob, styles.blob3, blob3Style]} />
             </View>
 
             <View style={[styles.constrainedContent, style]}>

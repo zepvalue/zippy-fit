@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, TextInput, StyleSheet, Alert } from 'react-native';
+import { View, Text, TextInput, StyleSheet, Alert, Image, TouchableOpacity } from 'react-native';
 import { supabase } from '../lib/supabase';
 import DuoButton from '../components/ui/DuoButton';
 import Container from '@/components/ui/Container';
@@ -8,6 +8,7 @@ export default function AuthScreen() {
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [loading, setLoading] = useState(false);
+    const [isLogin, setIsLogin] = useState(true);
 
     // Helper to translate technical errors to friendly messages
     function getErrorMessage(error: any) {
@@ -28,44 +29,44 @@ export default function AuthScreen() {
         return true;
     }
 
-    async function signInWithEmail() {
+    async function handleAuth() {
         if (!validateInputs()) return;
         setLoading(true);
-        const { error } = await supabase.auth.signInWithPassword({
-            email: email,
-            password: password,
-        });
 
-        if (error) {
-            Alert.alert("Login Failed", getErrorMessage(error));
-        }
-        setLoading(false);
-    }
-
-    async function signUpWithEmail() {
-        if (!validateInputs()) return;
-        setLoading(true);
-        const { error } = await supabase.auth.signUp({
-            email: email,
-            password: password,
-            options: {
-                emailRedirectTo: 'zippyfit://auth-callback'
-            }
-        });
-
-        if (error) {
-            Alert.alert("Signup Failed", getErrorMessage(error));
+        if (isLogin) {
+            // LOGIN
+            const { error } = await supabase.auth.signInWithPassword({
+                email: email,
+                password: password,
+            });
+            if (error) Alert.alert("Login Failed", getErrorMessage(error));
         } else {
-            Alert.alert("Check your inbox!", "We sent you a verification link.");
+            // SIGN UP
+            const { error } = await supabase.auth.signUp({
+                email: email,
+                password: password,
+                options: { emailRedirectTo: 'zippyfit://auth-callback' }
+            });
+            if (error) {
+                Alert.alert("Signup Failed", getErrorMessage(error));
+            } else {
+                Alert.alert("Check your inbox!", "We sent you a verification link.");
+                setIsLogin(true); // Switch back to login after signup attempt
+            }
         }
         setLoading(false);
     }
 
     return (
         <Container style={{ justifyContent: 'center' }}>
+            <Image
+                source={require('../assets/mascot_happy.png')}
+                style={{ width: 120, height: 120, alignSelf: 'center', marginBottom: 10 }}
+                resizeMode="contain"
+            />
             <Text style={styles.title}> ZippyFit </Text>
 
-            < View style={styles.inputContainer} >
+            <View style={styles.inputContainer}>
                 <TextInput
                     placeholder="Email"
                     placeholderTextColor="#A0A0A0"
@@ -84,8 +85,16 @@ export default function AuthScreen() {
                 />
             </View>
 
-            < DuoButton title={loading ? "Loading..." : "LOG IN"} onPress={signInWithEmail} />
-            <DuoButton title="CREATE ACCOUNT" onPress={signUpWithEmail} color="#fff" textColor="#58CC02" shadowColor="#E5E5E5" />
+            <DuoButton
+                title={loading ? "Loading..." : (isLogin ? "LOG IN" : "CREATE ACCOUNT")}
+                onPress={handleAuth}
+            />
+
+            <TouchableOpacity onPress={() => setIsLogin(!isLogin)} style={{ marginTop: 20 }}>
+                <Text style={styles.linkText}>
+                    {isLogin ? "Don't have an account? Sign Up" : "Already have an account? Log In"}
+                </Text>
+            </TouchableOpacity>
         </Container>
     );
 }
@@ -102,6 +111,12 @@ const styles = StyleSheet.create({
         fontSize: 18,
         marginBottom: 10,
         backgroundColor: '#F7F7F7',
-        color: '#333333' // Ensure text is visible
+        color: '#333333'
+    },
+    linkText: {
+        color: '#58CC02',
+        textAlign: 'center',
+        fontWeight: 'bold',
+        fontSize: 16
     }
 });

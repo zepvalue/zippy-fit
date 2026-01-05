@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
-import { Text, StyleSheet, Pressable, View, ViewStyle } from 'react-native';
+import React from 'react';
+import { Text, StyleSheet, Pressable, ViewStyle } from 'react-native';
+import Animated, { useSharedValue, useAnimatedStyle, withSpring } from 'react-native-reanimated';
 
 interface DuoButtonProps {
     title: string;
@@ -20,35 +21,46 @@ export default function DuoButton({
     width = '100%',
     disabled = false
 }: DuoButtonProps) {
-    const [isPressed, setIsPressed] = useState(false);
+    // Shared value for press state: 0 (unpressed) -> 1 (pressed)
+    const pressed = useSharedValue(0);
 
-    // If disabled, gray it out
-    if (disabled) {
-        color = '#E5E5E5';
-        shadowColor = '#C8C8C8';
-        textColor = '#AFAFAF';
-    }
+    // Derived colors for disabled state
+    const activeColor = disabled ? '#E5E5E5' : color;
+    const activeShadow = disabled ? '#C8C8C8' : shadowColor;
+    const activeText = disabled ? '#AFAFAF' : textColor;
+
+    const animatedStyle = useAnimatedStyle(() => {
+        return {
+            transform: [
+                {
+                    translateY: withSpring(pressed.value * 4, {
+                        mass: 0.5,
+                        damping: 12,
+                        stiffness: 200,
+                    })
+                }
+            ],
+            backgroundColor: activeColor // In case we want to animate color changes later
+        };
+    });
 
     return (
         <Pressable
-            onPressIn={() => !disabled && setIsPressed(true)}
-            onPressOut={() => !disabled && setIsPressed(false)}
+            onPressIn={() => !disabled && (pressed.value = 1)}
+            onPressOut={() => !disabled && (pressed.value = 0)}
             onPress={!disabled ? onPress : undefined}
             style={[styles.container, { width }]}
         >
             {/* The Bottom Shadow Layer */}
-            <View style={[styles.shadowLayer, { backgroundColor: shadowColor, borderRadius: 16 }]} />
+            <Animated.View style={[styles.shadowLayer, { backgroundColor: activeShadow, borderRadius: 16 }]} />
 
             {/* The Top Face Layer (Moves down when pressed) */}
-            <View style={[
+            <Animated.View style={[
                 styles.topLayer,
-                {
-                    backgroundColor: color,
-                    transform: [{ translateY: isPressed ? 4 : 0 }] // The 3D Click Effect
-                }
+                animatedStyle
             ]}>
-                <Text style={[styles.text, { color: textColor }]}>{title}</Text>
-            </View>
+                <Text style={[styles.text, { color: activeText }]}>{title}</Text>
+            </Animated.View>
         </Pressable>
     );
 }

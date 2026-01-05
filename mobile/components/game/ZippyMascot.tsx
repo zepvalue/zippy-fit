@@ -8,7 +8,7 @@ interface ZippyMascotProps {
 }
 
 const MESSAGES = {
-    SAFE: ["See you tomorrow! ⚡", "We crushed it! 🎉", "Rest up! 💤", "High five! ✋"],
+    SAFE: ["See you tomorrow! ⚡", "We crushed it! 🎉", "Wohooo 🎉 ", "High five! ✋"],
     AT_RISK: ["Don't break the streak! 🔥", "Zippy needs you! 🥺", "Let's go! 🏃", "Almost lost it! 😰"],
     SLEEPING: ["Zzz... waiting... 😴", "Wake up partner! 📢", "I'm nappin' here...", "Did they forget? 🤔"]
 };
@@ -124,7 +124,8 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'center',
         // Increased height slightly to fit bubble
-        height: 280,
+        height: 320, // Taller to avoid clipping
+        marginTop: 40, // Push down from header pills
         marginBottom: 10,
     },
     image: {

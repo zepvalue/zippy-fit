@@ -223,7 +223,8 @@ def get_dashboard(auth: tuple = Depends(get_authenticated_client)):
         "status": team_status,
         "user_completed_today": user_done,
         "partner_completed_today": partner_done,
-        "nudge_active": nudge_active
+        "nudge_active": nudge_active,
+        "nudge_at": last_nudge if nudge_active else None
     }
 
 # 4. Update 'log_workout' to save the Date
@@ -244,10 +245,12 @@ def log_workout(auth: tuple = Depends(get_authenticated_client)):
     if len(unique_users) >= 2:
         current_streak = client.table("teams").select("streak").eq("id", team_id).execute().data[0]['streak']
         
-        # UPDATE STREAK + LAST_STREAK_AT
+        # UPDATE STREAK + LAST_STREAK_AT + CLEAR NUDGES
         client.table("teams").update({
             "streak": current_streak + 1,
-            "last_streak_at": datetime.now(timezone.utc).isoformat() 
+            "last_streak_at": datetime.now(timezone.utc).isoformat(),
+            "last_nudge_at": None,  # Clear the nudge
+            "nudge_from_id": None
         }).eq("id", team_id).execute()
         
         status = "streak_incremented"

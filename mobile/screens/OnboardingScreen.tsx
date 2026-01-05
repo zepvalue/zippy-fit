@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
-import { View, Text, TextInput, StyleSheet, Alert, Platform } from 'react-native';
+import { View, Text, TextInput, StyleSheet, Alert, Platform, Image } from 'react-native';
+// Reanimated removed temporarily for debugging
+// import Animated, { FadeInDown } from 'react-native-reanimated';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import DuoButton from '../components/ui/DuoButton';
 import Container from '../components/ui/Container';
@@ -70,9 +72,15 @@ export default function OnboardingScreen({ token, onSuccess }: OnboardingProps) 
 
     return (
         <Container style={{ justifyContent: 'center' }}>
-            <MaterialCommunityIcons name="account-group" size={80} color="#58CC02" style={{ marginBottom: 20 }} />
-            <Text style={styles.title}>FIND YOUR DUO</Text>
-            <Text style={styles.subtitle}>Fitness is better together. Pair up with a friend to start your streak.</Text>
+            <View>
+                <Image
+                    source={require('../assets/mascot_happy.png')}
+                    style={{ width: 120, height: 120, alignSelf: 'center', marginBottom: 20 }}
+                    resizeMode="contain"
+                />
+                <Text style={styles.title}>RECRUIT YOUR PARTNER</Text>
+                <Text style={styles.subtitle}>Fitness is a team sport. Find your duo and start your streak!</Text>
+            </View>
 
             {mode === 'MENU' ? (
                 <View style={{ width: '100%', gap: 15, marginTop: 30 }}>

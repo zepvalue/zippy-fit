@@ -9,9 +9,10 @@ interface ProfileModalProps {
     visible: boolean;
     onClose: () => void;
     session: any;
+    code: string;
 }
 
-export default function ProfileModal({ visible, onClose, session }: ProfileModalProps) {
+export default function ProfileModal({ visible, onClose, session, code }: ProfileModalProps) {
     const handleSignOut = async () => {
         await supabase.auth.signOut();
         onClose();
@@ -38,6 +39,11 @@ export default function ProfileModal({ visible, onClose, session }: ProfileModal
                             <MaterialCommunityIcons name="account" size={40} color="white" />
                         </View>
                         <Text style={styles.email}>{session?.user?.email}</Text>
+
+                        <View style={styles.codeContainer}>
+                            <Text style={styles.codeLabel}>TEAM CODE</Text>
+                            <Text style={styles.codeValue}>{code || "----"}</Text>
+                        </View>
                     </View>
 
                     <DuoButton
@@ -83,7 +89,8 @@ const styles = StyleSheet.create({
     },
     userInfo: {
         alignItems: 'center',
-        marginBottom: 40
+        marginBottom: 40,
+        width: '100%'
     },
     avatar: {
         width: 80,
@@ -97,6 +104,29 @@ const styles = StyleSheet.create({
     email: {
         fontSize: 16,
         fontWeight: 'bold',
-        color: '#4B4B4B'
+        color: '#4B4B4B',
+        marginBottom: 20
     },
+    codeContainer: {
+        backgroundColor: '#F7F7F7',
+        padding: 15,
+        borderRadius: 16,
+        alignItems: 'center',
+        width: '100%',
+        borderWidth: 2,
+        borderColor: '#E5E5E5'
+    },
+    codeLabel: {
+        fontSize: 12,
+        fontWeight: 'bold',
+        color: '#B0B0B0',
+        marginBottom: 5,
+        letterSpacing: 1
+    },
+    codeValue: {
+        fontSize: 24,
+        fontWeight: '900',
+        color: '#58CC02',
+        letterSpacing: 3
+    }
 });

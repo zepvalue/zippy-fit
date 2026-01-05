@@ -4,6 +4,7 @@ import {
     useWindowDimensions, TouchableOpacity, Modal, TouchableWithoutFeedback,
     Platform, AppState, Vibration
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { api } from '../lib/api';
 import { supabase } from '../lib/supabase';
@@ -16,6 +17,7 @@ import ProfileModal from '../components/ui/ProfileModal';
 import JourneyMap from '../components/game/JourneyMap';
 import ZippyMascot from '../components/game/ZippyMascot';
 import OnboardingScreen from './OnboardingScreen';
+import TutorialScreen from './TutorialScreen';
 
 export default function DashboardScreen({ session }: { session: any }) {
     const { width } = useWindowDimensions();
@@ -26,6 +28,7 @@ export default function DashboardScreen({ session }: { session: any }) {
     const [showProfile, setShowProfile] = useState(false);
     const [initialToken, setInitialToken] = useState<string | null>(null);
     const [hasTeam, setHasTeam] = useState<boolean | null>(null);
+    const [tutorialVisible, setTutorialVisible] = useState(false);
 
     const [history, setHistory] = useState<string[]>([]);
     const [nudgeActive, setNudgeActive] = useState(false);
@@ -39,7 +42,8 @@ export default function DashboardScreen({ session }: { session: any }) {
         status: 'AT_RISK' as 'SAFE' | 'AT_RISK',
         user_completed_today: false,
         partner_completed_today: false,
-        code: '????'
+        code: '????',
+        nudge_at: null as string | null
     });
 
     // REFRESHED LOGIC: This only shows SAFE if the partner is truly READY
@@ -59,7 +63,8 @@ export default function DashboardScreen({ session }: { session: any }) {
 
         if (!silent) {
             setLoading(true);
-            setData(prev => ({ ...prev, partner_completed_today: false, status: 'AT_RISK' }));
+            // DON'T Reset to AT_RISK here - causes flicker!
+            // setData(prev => ({ ...prev, partner_completed_today: false, status: 'AT_RISK' }));
         }
 
         try {
@@ -76,8 +81,30 @@ export default function DashboardScreen({ session }: { session: any }) {
 
                 if (dashboardRes) {
                     setHasTeam(dashboardRes.has_team);
-                    setData({ ...dashboardRes });
-                    setNudgeActive(!!dashboardRes.nudge_active);
+
+                    // Check for Tutorial
+                    if (dashboardRes.has_team) {
+                        const hasSeen = await AsyncStorage.getItem('tutorial_seen');
+                        if (!hasSeen) setTutorialVisible(true);
+                    }
+
+                    // Merge new data but preserve nudge logic for a moment to calculate correctness
+                    const newData = { ...dashboardRes };
+                    setData(newData);
+
+                    // --- PERSISTENT NUDGE LOGIC ---
+                    if (dashboardRes.nudge_active && dashboardRes.nudge_at) {
+                        const lastDismissed = await AsyncStorage.getItem('last_dismissed_nudge');
+                        // Show ONLY if the timestamp differs exactly (so a new nudge has a new time)
+                        // Also, ensure we haven't dismissed it in this session
+                        if (lastDismissed !== dashboardRes.nudge_at) {
+                            setNudgeActive(true);
+                        } else {
+                            setNudgeActive(false);
+                        }
+                    } else {
+                        setNudgeActive(false);
+                    }
                 }
                 if (historyRes) setHistory(historyRes);
                 if (challengeRes) setChallengeText(challengeRes);
@@ -155,6 +182,13 @@ export default function DashboardScreen({ session }: { session: any }) {
         return <OnboardingScreen token={initialToken} onSuccess={() => fetchData()} />;
     }
 
+    if (tutorialVisible) {
+        return <TutorialScreen onComplete={async () => {
+            setTutorialVisible(false);
+            await AsyncStorage.setItem('tutorial_seen', 'true');
+        }} />;
+    }
+
     const NavItems = () => (
         <>
             <TouchableOpacity style={isWide ? styles.sidebarItem : styles.tabItem}>
@@ -194,10 +228,7 @@ export default function DashboardScreen({ session }: { session: any }) {
                     refreshControl={<RefreshControl refreshing={loading} onRefresh={() => fetchData(false)} />}
                 >
                     <View style={styles.topInfoRow}>
-                        <View style={styles.pillContainer}>
-                            <Text style={styles.pillLabel}>CODE:</Text>
-                            <Text style={styles.pillValue}>{data.code}</Text>
-                        </View>
+                        {/* Note: Code widget moved to Profile */}
                         <View style={[styles.pillContainer, { borderColor: data.partner_completed_today ? '#58CC02' : '#E5E5E5' }]}>
                             <Text style={styles.pillLabel}>PARTNER:</Text>
                             <Text style={[styles.pillValue, { color: data.partner_completed_today ? '#58CC02' : '#CECECE' }]}>
@@ -238,20 +269,27 @@ export default function DashboardScreen({ session }: { session: any }) {
                         </View>
                     </View>
                 </ScrollView>
-            </View>
-            {!isWide && <View style={styles.bottomBar}><NavItems /></View>}
+            </View >
+            {!isWide && <View style={styles.bottomBar}><NavItems /></View>
+            }
 
             <ProfileModal
                 visible={showProfile}
                 onClose={() => setShowProfile(false)}
                 session={session}
+                code={data.code}
             />
 
             <NudgeModal
                 visible={nudgeActive && !nudgeDismissed}
-                onDismiss={() => setNudgeDismissed(true)}
+                onDismiss={async () => {
+                    setNudgeDismissed(true);
+                    if (data.nudge_at) {
+                        await AsyncStorage.setItem('last_dismissed_nudge', data.nudge_at);
+                    }
+                }}
             />
-        </Container>
+        </Container >
     );
 }
 

@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { FontAwesome5 } from '@expo/vector-icons';
+import Animated, { FadeInUp } from 'react-native-reanimated';
 
 interface StatusCardProps {
     status: 'SAFE' | 'AT_RISK';
@@ -10,7 +11,10 @@ export default function StatusCard({ status }: StatusCardProps) {
     const isSafe = status === 'SAFE';
 
     return (
-        <View style={styles.card}>
+        <Animated.View
+            entering={FadeInUp.delay(300).springify()}
+            style={styles.card}
+        >
             <View style={styles.iconCircle}>
                 <FontAwesome5 name={isSafe ? "shield-alt" : "exclamation-triangle"} size={26} color={isSafe ? '#1CB0F6' : '#FF4B4B'} />
             </View>
@@ -20,7 +24,7 @@ export default function StatusCard({ status }: StatusCardProps) {
                     {isSafe ? "Partner completed their task." : "Partner has not worked out yet!"}
                 </Text>
             </View>
-        </View>
+        </Animated.View>
     );
 }
 
