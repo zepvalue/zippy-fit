@@ -7,11 +7,15 @@ LogBox.ignoreLogs([
   "expo-notifications: Android Push notifications", // Ignore Expo Go SDK 53 restriction error
 ]);
 
+import { SafeAreaProvider } from 'react-native-safe-area-context';
+
 export default function RootLayout() {
   return (
-    <Stack screenOptions={{ headerShown: false }}>
-      {/* This configuration applies to ALL screens */}
-      <Stack.Screen name="index" />
-    </Stack>
+    <SafeAreaProvider>
+      <Stack screenOptions={{ headerShown: false }}>
+        {/* This configuration applies to ALL screens */}
+        <Stack.Screen name="index" />
+      </Stack>
+    </SafeAreaProvider>
   );
 }

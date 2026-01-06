@@ -53,5 +53,19 @@ def get_authenticated_client(credentials: HTTPAuthorizationCredentials = Securit
 
     except Exception as e:
         print(f"Auth Error (Scoped): {e}")
-        raise HTTPException(status_code=401, detail="Invalid or expired token")
+        
+        # STRICT 401 FILTER
+        # Only return 401 if we are SURE it is an auth issue.
+        # Otherwise, assume it's a network glitch (503) so the app retries instead of logging out.
+        msg = str(e).lower()
+        
+        known_auth_errors = ["invalid token", "expired", "missing", "unauthorized", "signature", "json web token"]
+        
+        if any(err in msg for err in known_auth_errors):
+             raise HTTPException(status_code=401, detail="Invalid or expired token")
+        
+        # Everything else -> 503 Service Unavailable
+        # This catches "connection terminated", "timeout", "server disconnected", "max retries", etc.
+        print("⚠️ treating unknown error as 503 to prevent logout")
+        raise HTTPException(status_code=503, detail="Service Unavailable (Auth Check Failed)")
 

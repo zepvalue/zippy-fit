@@ -1,141 +1,360 @@
-import React, { useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import React, { useRef, useState, useEffect } from 'react';
+import { View, Text, StyleSheet, Image, PanResponder, Animated as RNAnimated, Dimensions } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import Animated, { useSharedValue, useAnimatedStyle, withSpring, withSequence, withTiming } from 'react-native-reanimated';
+import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
 
 interface ChallengeOfTheDayProps {
     challengeText: string;
     onComplete: () => void;
     isCompleted: boolean;
+    type?: 'normal' | 'spot_cover' | 'critical';
+    mascotStatus?: 'SAFE' | 'AT_RISK' | 'SLEEPING';
 }
 
-const AnimatedTouchableOpacity = Animated.createAnimatedComponent(TouchableOpacity);
+const SLIDER_WIDTH = 250;
+const SLIDER_HEIGHT = 60;
+const THUMB_SIZE = 50;
+const SWIPE_THRESHOLD = SLIDER_WIDTH * 0.7;
 
-export default function ChallengeOfTheDay({ challengeText, onComplete, isCompleted }: ChallengeOfTheDayProps) {
-    const scale = useSharedValue(1);
-    const iconScale = useSharedValue(1);
+const MESSAGES = {
+    SAFE: ["See you tomorrow! ⚡", "We crushed it! 🎉", "Wohooo 🎉 ", "High five! ✋"],
+    AT_RISK: ["Don't break the streak! 🔥", "Zippy needs you! 🥺", "Let's go! 🏃", "Almost lost it! 😰"],
+    SLEEPING: ["Zzz... waiting... 😴", "Wake up partner! 📢", "I'm nappin' here...", "Did they forget? 🤔"]
+};
 
-    const buttonStyle = useAnimatedStyle(() => {
-        return {
-            transform: [{ scale: scale.value }]
-        };
-    });
+export default function ChallengeOfTheDay({ challengeText, onComplete, isCompleted, type = 'normal', mascotStatus = 'AT_RISK' }: ChallengeOfTheDayProps) {
+    const isHero = type === 'spot_cover';
+    const isCritical = type === 'critical';
 
-    const iconStyle = useAnimatedStyle(() => {
-        return {
-            transform: [{ scale: iconScale.value }]
-        };
-    });
+    // COLORS
+    let mainColor = '#58CC02'; // Green
+    if (isHero) mainColor = '#3B82F6'; // Blue
+    if (isCritical) mainColor = '#DC2626'; // Red
 
+    // MASCOT
+    let mascotSource;
+    switch (mascotStatus) {
+        case 'SAFE':
+            mascotSource = require('../../assets/animations/happy_zippy_animated.gif');
+            break;
+        case 'SLEEPING':
+            mascotSource = require('../../assets/animations/sleepy_zippy_animated.gif');
+            break;
+        case 'AT_RISK':
+        default:
+            mascotSource = require('../../assets/animations/worried_zippy_animated.gif');
+            break;
+    }
+
+    // SPEECH BUBBLE LOGIC
+    const [message, setMessage] = useState("");
+    useEffect(() => {
+        const options = MESSAGES[mascotStatus || 'AT_RISK'];
+        setMessage(options[Math.floor(Math.random() * options.length)]);
+    }, [mascotStatus]);
+
+    // --- SLIDER LOGIC ---
+    const pan = useRef(new RNAnimated.ValueXY()).current;
+    const [sliderActive, setSliderActive] = useState(false);
+
+    const resetSlider = () => {
+        RNAnimated.spring(pan, {
+            toValue: { x: 0, y: 0 },
+            useNativeDriver: false
+        }).start();
+        setSliderActive(false);
+    };
+
+    const panResponder = useRef(
+        PanResponder.create({
+            onStartShouldSetPanResponder: () => !isCompleted,
+            onMoveShouldSetPanResponder: () => !isCompleted,
+            onPanResponderGrant: () => {
+                setSliderActive(true);
+                pan.setOffset({
+                    x: (pan.x as any)._value,
+                    y: 0
+                });
+            },
+            onPanResponderMove: (_, gestureState) => {
+                if (gestureState.dx > 0 && gestureState.dx < SLIDER_WIDTH - THUMB_SIZE) {
+                    pan.setValue({ x: gestureState.dx, y: 0 });
+                }
+            },
+            onPanResponderRelease: (_, gestureState) => {
+                pan.flattenOffset();
+                if (gestureState.dx > SWIPE_THRESHOLD) {
+                    onComplete();
+                    // Snap to end visually
+                    RNAnimated.timing(pan, {
+                        toValue: { x: SLIDER_WIDTH - THUMB_SIZE - 10, y: 0 },
+                        duration: 200,
+                        useNativeDriver: false
+                    }).start();
+                } else {
+                    resetSlider();
+                }
+            }
+        })
+    ).current;
+
+    // Effect to handle external completion (if triggered simply by prop update)
+    // or just to maintain state if already completed
     useEffect(() => {
         if (isCompleted) {
-            // Pulse the icon once explicitly when completed
-            iconScale.value = withSequence(
-                withTiming(1.5, { duration: 200 }),
-                withSpring(1)
-            );
+            pan.setValue({ x: SLIDER_WIDTH - THUMB_SIZE - 10, y: 0 });
         }
     }, [isCompleted]);
 
-    const handlePress = () => {
-        if (isCompleted) return;
-
-        // Button bounce
-        scale.value = withSequence(
-            withTiming(0.9, { duration: 100 }),
-            withTiming(1, { duration: 100 }),
-            withTiming(1, { duration: 0 }) // ensure reset
-        );
-
-        onComplete();
-    };
+    const animatedWidth = RNAnimated.add(pan.x, THUMB_SIZE);
 
     return (
         <View style={styles.container}>
-            <View style={styles.header}>
-                <Animated.View style={iconStyle}>
-                    <MaterialCommunityIcons name="trophy" size={24} color={isCompleted ? "#FFD700" : "#FF9600"} />
-                </Animated.View>
-                <Text style={styles.title}>CHALLENGE OF THE DAY</Text>
+            {/* 1. FREE MASCOT (Overlapping) */}
+            <View style={styles.mascotContainer}>
+                {/* SPEECH BUBBLE OVERLAY */}
+                {message && (
+                    <Animated.View
+                        entering={FadeIn.delay(500).duration(500)}
+                        style={styles.speechBubble}
+                    >
+                        <Text style={styles.speechText}>{message}</Text>
+                        <View style={styles.speechArrow} />
+                    </Animated.View>
+                )}
+
+                <Image
+                    source={mascotSource}
+                    style={styles.mascotImage}
+                    resizeMode="contain"
+                />
             </View>
 
-            <Text style={styles.challengeText}>{challengeText}</Text>
+            {/* 2. MAIN CARD */}
+            <View style={styles.card}>
 
-            <AnimatedTouchableOpacity
-                style={[styles.button, isCompleted && styles.buttonCompleted, buttonStyle]}
-                onPress={handlePress}
-                disabled={isCompleted}
-                activeOpacity={0.8}
-            >
-                <Text style={[styles.buttonText, isCompleted && styles.buttonTextCompleted]}>
-                    {isCompleted ? "COMPLETED ✅" : "MARK COMPLETE"}
+                {/* HEADER LABEL */}
+                <Text style={[styles.headerLabel, isCritical && { color: '#EF4444' }]}>
+                    {isCritical ? "⚠️ CRITICAL FAILURE" : "CHALLENGE OF THE DAY"}
                 </Text>
-            </AnimatedTouchableOpacity>
+
+                {/* HUGE TASK TEXT */}
+                <Text style={styles.hugeText}>
+                    {isCompleted ? "DONE!" : challengeText}
+                </Text>
+
+                {/* SLIDER BUTTON */}
+                <View style={styles.sliderContainer}>
+                    {/* Background Track */}
+                    <View style={styles.sliderTrack} />
+
+                    {/* Active Fill Track */}
+                    <RNAnimated.View style={[styles.sliderFill, { width: animatedWidth, backgroundColor: isCompleted ? '#E5E7EB' : mainColor }]} />
+
+                    {/* Text Underneath Slider (Hint) */}
+                    {!sliderActive && !isCompleted && (
+                        <View style={styles.sliderHintContainer}>
+                            <Text style={styles.sliderHintText}>SLIDE TO COMPLETE</Text>
+                            <MaterialCommunityIcons name="chevron-double-right" size={20} color="white" style={{ opacity: 0.8 }} />
+                        </View>
+                    )}
+
+                    {/* Draggable Thumb */}
+                    <RNAnimated.View
+                        style={[
+                            styles.sliderThumb,
+                            {
+                                transform: [{ translateX: pan.x }],
+                                backgroundColor: isCompleted ? '#9CA3AF' : 'white'
+                            }
+                        ]}
+                        {...panResponder.panHandlers}
+                    >
+                        <MaterialCommunityIcons
+                            name={isCompleted ? "check" : (isCritical ? "alert" : "trophy")}
+                            size={24}
+                            color={isCompleted ? "white" : mainColor}
+                        />
+                    </RNAnimated.View>
+                </View>
+
+                {/* STATUS TEXT (Optional Footer) */}
+                {isCompleted && (
+                    <Text style={styles.footerText}>Great job! Streak preserved.</Text>
+                )}
+            </View>
         </View>
     );
 }
 
 const styles = StyleSheet.create({
     container: {
-        // De-widgetized: Transparent background
-        backgroundColor: 'transparent',
-        borderRadius: 0,
-        elevation: 0,
-        shadowOpacity: 0,
-
-        padding: 10,
-        marginTop: 0, // Closer to Zippy
-        marginBottom: 20,
         width: '100%',
-        alignItems: 'center',
+        alignItems: 'center', // Center the card wrapper
+        position: 'relative',
+        marginTop: 40, // Increased spacing from element above
+        marginBottom: 40
     },
-    header: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        marginBottom: 15,
-        gap: 8,
+    // MASCOT
+    mascotContainer: {
+        position: 'absolute',
+        top: -50, // Reduced overlap (was -75) - just peeking now
+        right: 0, // Align flush with right edge
+        width: 150, // Slightly smaller to be less overwhelming? Or keep 160. Let's try 150.
+        height: 150,
+        zIndex: 20,
+        elevation: 20,
+        alignItems: 'center'
     },
-    title: {
-        fontWeight: '900',
-        color: '#B0B0B0', // Softer grey
-        fontSize: 14,
-        letterSpacing: 2,
+    mascotImage: {
+        width: '100%',
+        height: '100%',
     },
-    challengeText: {
-        fontSize: 20, // Slightly larger
+    // SPEECH BUBBLE
+    speechBubble: {
+        position: 'absolute',
+        top: -30, // Adjusted relative to new mascot size
+        right: 30,
+        backgroundColor: 'white',
+        paddingHorizontal: 12,
+        paddingVertical: 8,
+        borderRadius: 12,
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.15,
+        shadowRadius: 4,
+        elevation: 5,
+        zIndex: 30,
+        maxWidth: 140, // More width
+    },
+    speechText: {
+        fontSize: 12,
         fontWeight: 'bold',
-        color: '#4B4B4B',
+        color: '#4B5563',
         textAlign: 'center',
-        marginBottom: 24,
-        lineHeight: 28,
+        fontStyle: 'italic'
     },
-    button: {
-        paddingVertical: 16, // Taller button
-        paddingHorizontal: 24,
-        borderRadius: 24, // Pill shape
-        backgroundColor: '#58CC02',
-        // Removed hard border for cleaner look, or keep subtle one
-        shadowColor: "#58CC02",
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.3,
-        shadowRadius: 5,
-        elevation: 4,
+    speechArrow: {
+        position: 'absolute',
+        bottom: -6,
+        right: 20,
+        width: 0,
+        height: 0,
+        backgroundColor: 'transparent',
+        borderStyle: 'solid',
+        borderLeftWidth: 6,
+        borderRightWidth: 6,
+        borderTopWidth: 6,
+        borderLeftColor: 'transparent',
+        borderRightColor: 'transparent',
+        borderTopColor: 'white',
+    },
+    // CARD
+    card: {
+        backgroundColor: 'white',
         width: '100%',
-        alignItems: 'center',
+        borderRadius: 32,
+        paddingVertical: 24,
+        paddingHorizontal: 20,
+        // Align content to LEFT
+        alignItems: 'flex-start',
+        // Drop Shadow
+        shadowColor: "#059669", // Greenish shadow
+        shadowOffset: { width: 0, height: 10 },
+        shadowOpacity: 0.15,
+        shadowRadius: 20,
+        elevation: 10,
+        borderWidth: 1,
+        borderColor: '#F3F4F6'
     },
-    buttonCompleted: {
-        backgroundColor: '#F0F0F0',
-        shadowOpacity: 0,
-        elevation: 0,
-    },
-    buttonText: {
-        color: 'white',
-        fontSize: 16,
+    headerLabel: {
+        fontSize: 11,
         fontWeight: '900',
-        letterSpacing: 1,
+        color: '#9CA3AF',
+        letterSpacing: 2,
+        textTransform: 'uppercase',
+        marginBottom: 8
     },
-    buttonTextCompleted: {
-        color: '#AFAFAF',
+    hugeText: {
+        fontSize: 32,
+        fontWeight: '900',
+        color: '#1F2937',
+        textAlign: 'left', // Left align
+        marginBottom: 24,
+        lineHeight: 36,
+        width: '70%', // Leave room for mascot on right
+    },
+    // SLIDER
+    sliderContainer: {
+        width: SLIDER_WIDTH,
+        height: SLIDER_HEIGHT,
+        borderRadius: SLIDER_HEIGHT / 2,
+        position: 'relative',
+        justifyContent: 'center',
+        // Shadow for the button itself
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.1,
+        shadowRadius: 10,
+        elevation: 5,
+        backgroundColor: 'white', // Container bg
+        alignSelf: 'center', // Keep slider centered or 'flex-start'
+        marginTop: 10
+    },
+    sliderTrack: {
+        position: 'absolute',
+        width: '100%',
+        height: '100%',
+        borderRadius: SLIDER_HEIGHT / 2,
+        backgroundColor: '#F3F4F6', // Light gray track
+        overflow: 'hidden'
+    },
+    sliderFill: {
+        position: 'absolute',
+        height: '100%',
+        borderRadius: SLIDER_HEIGHT / 2,
+        left: 0,
+    },
+    sliderHintContainer: {
+        position: 'absolute',
+        width: '100%',
+        height: '100%',
+        justifyContent: 'center',
+        alignItems: 'center',
+        flexDirection: 'row',
+        zIndex: 1,
+        paddingLeft: 40 // Offset for thumb
+    },
+    sliderHintText: {
+        color: 'white',
+        fontWeight: '900',
+        fontSize: 14,
+        letterSpacing: 1,
+        textShadowColor: 'rgba(0,0,0,0.1)',
+        textShadowOffset: { width: 0, height: 1 },
+        textShadowRadius: 2
+    },
+    sliderThumb: {
+        width: THUMB_SIZE,
+        height: THUMB_SIZE,
+        borderRadius: THUMB_SIZE / 2,
+        backgroundColor: 'white',
+        position: 'absolute',
+        left: 5, // Padding start
+        justifyContent: 'center',
+        alignItems: 'center',
+        zIndex: 10,
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.2,
+        shadowRadius: 4,
+        elevation: 4
+    },
+    footerText: {
+        marginTop: 15,
+        color: '#10B981',
+        fontWeight: 'bold',
+        fontSize: 13,
+        alignSelf: 'center'
     }
 });
-

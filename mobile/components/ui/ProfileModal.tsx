@@ -8,11 +8,13 @@ import DuoButton from './DuoButton';
 interface ProfileModalProps {
     visible: boolean;
     onClose: () => void;
-    session: any;
+    session?: any; // Made optional
     code: string;
+    onReplayTutorial: () => void;
+    onDebug?: () => void; // New
 }
 
-export default function ProfileModal({ visible, onClose, session, code }: ProfileModalProps) {
+export default function ProfileModal({ visible, onClose, session, code, onReplayTutorial, onDebug }: ProfileModalProps) {
     const handleSignOut = async () => {
         await supabase.auth.signOut();
         onClose();
@@ -44,6 +46,24 @@ export default function ProfileModal({ visible, onClose, session, code }: Profil
                             <Text style={styles.codeLabel}>TEAM CODE</Text>
                             <Text style={styles.codeValue}>{code || "----"}</Text>
                         </View>
+
+                        <TouchableOpacity
+                            style={{ flexDirection: 'row', alignItems: 'center', marginTop: 20 }}
+                            onPress={onReplayTutorial}
+                        >
+                            <MaterialCommunityIcons name="help-circle-outline" size={20} color="#3B82F6" />
+                            <Text style={{ marginLeft: 8, color: '#3B82F6', fontWeight: 'bold' }}>REPLAY TUTORIAL</Text>
+                        </TouchableOpacity>
+
+                        {onDebug && (
+                            <TouchableOpacity
+                                style={{ flexDirection: 'row', alignItems: 'center', marginTop: 20 }}
+                                onPress={() => { onClose(); onDebug(); }}
+                            >
+                                <MaterialCommunityIcons name="bug" size={20} color="#EF4444" />
+                                <Text style={{ marginLeft: 8, color: '#EF4444', fontWeight: 'bold' }}>DEBUG MENU</Text>
+                            </TouchableOpacity>
+                        )}
                     </View>
 
                     <DuoButton

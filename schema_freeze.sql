@@ -1,0 +1,1 @@
+ALTER TABLE teams ADD COLUMN freezes_available INTEGER DEFAULT 0;

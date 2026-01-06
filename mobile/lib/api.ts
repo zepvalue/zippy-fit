@@ -59,11 +59,12 @@ export const api = {
     },
 
     // 2. Log Workout
-    logWorkout: async (token: string) => {
+    logWorkout: async (token: string, damage: number = 0, durationMinutes: number = 0) => {
         try {
             const response = await fetch(`${BASE_URL}/workout`, {
                 method: 'POST',
                 headers: getHeaders(token),
+                body: JSON.stringify({ damage, duration_minutes: durationMinutes })
             });
             return await response.json();
         } catch (error) {
@@ -173,10 +174,36 @@ export const api = {
                 headers: getHeaders(token),
             });
             const data = await response.json();
-            return data.text || "No challenge found";
+            // Return full object: { text, base_count, unit }
+            return data;
         } catch (error) {
-            console.error("🔴 API Error (getChallenge):", error);
-            return "Check your connection";
+            return { text: "Check your connection", base_count: 0 };
+        }
+    },
+
+    getGrimoire: async (token: string) => {
+        try {
+            const response = await fetch(`${BASE_URL}/grimoire`, {
+                headers: getHeaders(token),
+            });
+            if (!response.ok) return [];
+            return await response.json();
+        } catch (error) {
+            console.error("🔴 API: Get Grimoire Failed:", error);
+            return [];
+        }
+    },
+
+    requestSpot: async (token: string) => {
+        try {
+            const response = await fetch(`${BASE_URL}/team/spot`, {
+                method: 'POST',
+                headers: getHeaders(token),
+            });
+            return await response.json();
+        } catch (error) {
+            console.error("🔴 API: Request Spot Failed:", error);
+            return { error: "Network error" };
         }
     }
 };

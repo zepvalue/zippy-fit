@@ -14,19 +14,25 @@ export default function TutorialScreen({ onComplete }: TutorialScreenProps) {
     const steps = [
         {
             title: "SHARED FATE",
-            text: "You and your partner share a single streak. If one fails, you both reset.",
+            text: "Your team shares a single streak. If one person misses a workout, the streak resets for everyone!",
             icon: "heart-multiple",
             color: "#FF4B4B"
         },
         {
-            title: "DAILY MISSION",
-            text: "Complete the daily challenge to secure your side. You can't be safe until your partner finishes too!",
-            icon: "trophy",
+            title: "BOSS BATTLES",
+            text: "Every workout deals damage to the Boss. Choose harder attacks (more reps) to defeat it faster!",
+            icon: "sword-cross",
             color: "#FF9600"
         },
         {
+            title: "TEAM WORK",
+            text: "Invite as many friends as you want. The team is only safe when EVERYONE has completed their mission.",
+            icon: "account-group",
+            color: "#3B82F6"
+        },
+        {
             title: "NUDGE THEM",
-            text: "Partner sleeping? Send them a Nudge notification to wake them up!",
+            text: "Teammate sleeping? Send a Nudge notification to wake them up!",
             icon: "bell-ring",
             color: "#58CC02"
         }

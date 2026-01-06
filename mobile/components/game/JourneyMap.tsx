@@ -4,10 +4,13 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import Animated, { FadeIn, SlideInRight } from 'react-native-reanimated';
 
 interface JourneyMapProps {
-    history: string[]; // List of completed dates (YYYY-MM-DD)
+    history: string[];
+    onSpotRequest?: () => void;
+    canRequestSpot?: boolean;
+    spotStatus?: 'active' | 'none' | 'requested_by_partner';
 }
 
-export default function JourneyMap({ history }: JourneyMapProps) {
+export default function JourneyMap({ history, onSpotRequest, canRequestSpot, spotStatus }: JourneyMapProps) {
     // Generate last 5 days + next 2 days for the "Map" view
     const today = new Date();
     const days = [];
@@ -19,7 +22,19 @@ export default function JourneyMap({ history }: JourneyMapProps) {
 
     return (
         <View style={styles.container}>
-            <Text style={styles.title}>YOUR JOURNEY</Text>
+            <View style={styles.headerRow}>
+                <Text style={styles.title}>YOUR JOURNEY</Text>
+                {canRequestSpot && (
+                    <Text onPress={onSpotRequest} style={styles.spotLink}>
+                        Can't workout?
+                    </Text>
+                )}
+                {spotStatus === 'active' && (
+                    <View style={styles.badge}>
+                        <Text style={styles.badgeText}>SPOT ACTIVE</Text>
+                    </View>
+                )}
+            </View>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.track}>
                 {days.map((date, index) => {
                     const isCompleted = history.includes(date);
@@ -39,14 +54,20 @@ export default function JourneyMap({ history }: JourneyMapProps) {
                                 {isToday && !isCompleted ? (
                                     <View style={styles.mascotPlaceholder}>
                                         {/* Zippy Head will go here or just an icon for now */}
-                                        <MaterialCommunityIcons name="paw" size={20} color="white" />
+                                        <MaterialCommunityIcons name="lightning-bolt" size={20} color="white" />
                                     </View>
                                 ) : (
-                                    <MaterialCommunityIcons
-                                        name={isCompleted ? "check-bold" : (isFuture ? "lock" : "close")}
-                                        size={isCompleted ? 20 : 16}
-                                        color={isCompleted ? "white" : "#B0B0B0"}
-                                    />
+                                    (isCompleted || isFuture) ? (
+                                        <MaterialCommunityIcons
+                                            name={isCompleted ? "check-bold" : "lock"}
+                                            size={isCompleted ? 20 : 16}
+                                            color={isCompleted ? "white" : "#B0B0B0"}
+                                        />
+                                    ) : (
+                                        <Text style={styles.pastDayText}>
+                                            {new Date(date).toLocaleDateString('en-US', { weekday: 'short' }).charAt(0)}
+                                        </Text>
+                                    )
                                 )}
                             </View>
 
@@ -80,8 +101,32 @@ const styles = StyleSheet.create({
         color: '#B0B0B0',
         fontSize: 14,
         letterSpacing: 2,
-        marginBottom: 15,
+        marginBottom: 0, // removed margin to handle row
         textAlign: 'center'
+    },
+    headerRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: 15,
+        paddingHorizontal: 10
+    },
+    spotLink: {
+        color: '#FF9600',
+        fontWeight: 'bold',
+        fontSize: 12,
+        textDecorationLine: 'underline'
+    },
+    badge: {
+        backgroundColor: '#FF9600',
+        paddingHorizontal: 8,
+        paddingVertical: 2,
+        borderRadius: 8
+    },
+    badgeText: {
+        color: 'white',
+        fontWeight: 'bold',
+        fontSize: 10
     },
     track: {
         alignItems: 'center',
@@ -132,5 +177,10 @@ const styles = StyleSheet.create({
         color: '#B0B0B0',
         width: 50,
         textAlign: 'center'
+    },
+    pastDayText: {
+        color: '#B0B0B0',
+        fontWeight: 'bold',
+        fontSize: 14
     }
 });

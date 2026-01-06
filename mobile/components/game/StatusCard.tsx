@@ -5,9 +5,11 @@ import Animated, { FadeInUp } from 'react-native-reanimated';
 
 interface StatusCardProps {
     status: 'SAFE' | 'AT_RISK';
+    overrideTitle?: string;
+    overrideSubtitle?: string;
 }
 
-export default function StatusCard({ status }: StatusCardProps) {
+export default function StatusCard({ status, overrideTitle, overrideSubtitle }: StatusCardProps) {
     const isSafe = status === 'SAFE';
 
     return (
@@ -19,9 +21,11 @@ export default function StatusCard({ status }: StatusCardProps) {
                 <FontAwesome5 name={isSafe ? "shield-alt" : "exclamation-triangle"} size={26} color={isSafe ? '#1CB0F6' : '#FF4B4B'} />
             </View>
             <View style={styles.textContainer}>
-                <Text style={[styles.title, { color: isSafe ? '#1CB0F6' : '#FF4B4B' }]}>{isSafe ? "SAFE" : "AT RISK"}</Text>
+                <Text style={[styles.title, { color: isSafe ? '#1CB0F6' : '#FF4B4B' }]}>
+                    {overrideTitle || (isSafe ? "SAFE" : "AT RISK")}
+                </Text>
                 <Text style={styles.subtitle}>
-                    {isSafe ? "Partner completed their task." : "Partner has not worked out yet!"}
+                    {overrideSubtitle || (isSafe ? "Partner completed their task." : "Partner has not worked out yet!")}
                 </Text>
             </View>
         </Animated.View>
