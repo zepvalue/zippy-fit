@@ -1,8 +1,9 @@
-import { View, Text, StyleSheet, ScrollView, RefreshControl, Dimensions, TouchableOpacity, Platform, Alert, Image, Modal } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { View, Text, StyleSheet, ScrollView, RefreshControl, Dimensions, TouchableOpacity, Platform, Alert, Image, Modal, ImageBackground } from 'react-native';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import React, { useEffect, useState, useRef } from 'react';
 import { useRouter } from 'expo-router';
 import { api } from '../lib/api';
+import { supabase } from '../lib/supabase';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { StatusBar } from 'expo-status-bar';
 import { BlurView } from 'expo-blur';
@@ -56,10 +57,27 @@ export default function DashboardScreen() {
     const [unlockedFact, setUnlockedFact] = useState<{ title: string; text: string } | null>(null);
     const [grimoireVisible, setGrimoireVisible] = useState(false);
 
+    // AUTH STATE
+    const [session, setSession] = useState<any>(null);
+
     useEffect(() => {
         checkTutorial();
         fetchData();
+        fetchSession();
     }, []);
+
+    const fetchSession = async () => {
+        try {
+            if (!supabase) {
+                console.error("❌ Supabase object is undefined!");
+                return;
+            }
+            const { data } = await supabase.auth.getSession();
+            setSession(data.session);
+        } catch (e) {
+            console.error("❌ Error fetching session:", e);
+        }
+    };
 
     const checkTutorial = async () => {
         const done = await AsyncStorage.getItem('tutorial_completed');
@@ -69,55 +87,67 @@ export default function DashboardScreen() {
     };
 
     const fetchData = async () => {
-        const token = await AsyncStorage.getItem('userToken');
-        // If no token, we just don't fetch data, but let parent handle auth redirect if needed.
-        // Or better, we assume if we are mounted, we should try.
-        if (!token) return;
+        try {
+            let token = await AsyncStorage.getItem('userToken');
 
-        console.log("Fetching Dashboard Data...");
-        const data = await api.getDashboard(token);
-
-        if (data?.error === 'AUTH_ERROR') {
-            // Just sign out supabase, let parent handle it
-            // await AsyncStorage.removeItem('userToken'); 
-            // router.replace('/'); 
-            return;
-        }
-
-        if (data) {
-            setHasTeam(data.has_team);
-            if (data.has_team) {
-                setTeamId(data.team_id);
-                setTeamName(data.team_name);
-                setTeamCode(data.code);
-                setMemberCount(data.member_count);
-                setTeamCompletionCount(data.team_completion_count);
-                setHearts(data.hearts);
-                setStreak(data.streak);
-                setFreezes(data.freezes_available);
-                setStatus(data.status);
-                setUserDone(data.user_completed_today);
-                setPartnerDone(data.partner_completed_today);
-
-                setBossData({
-                    hp: data.boss_hp ?? 10000,
-                    maxHp: data.boss_max_hp ?? 10000,
-                    name: data.boss_name || "The Sloth King",
-                    imageIndex: data.boss_image_index ?? 0
-                });
-            } else {
-                // router.replace('/onboarding'); 
-                // Don't redirect automatically for now to stop loop
+            // SELF-HEAL: If no local token, but checking Supabase might help?
+            if (!token) {
+                const { data } = await supabase.auth.getSession();
+                if (data.session?.access_token) {
+                    console.log("DEBUG: Recovered token from Supabase Session");
+                    token = data.session.access_token;
+                    await AsyncStorage.setItem('userToken', token);
+                } else {
+                    console.log("DEBUG: No token. Stopping fetch.");
+                    return;
+                }
             }
+
+            const data = await api.getDashboard(token);
+
+            if (data?.error === 'AUTH_ERROR') {
+                // Handle auth error (logout?)
+                return;
+            }
+
+            if (data) {
+                setHasTeam(data.has_team);
+                if (data.has_team) {
+                    setTeamId(data.team_id);
+                    setTeamName(data.team_name);
+                    setTeamCode(data.code);
+                    setMemberCount(data.member_count);
+                    setTeamCompletionCount(data.team_completion_count);
+                    setHearts(data.hearts);
+                    setStreak(data.streak);
+                    setFreezes(data.freezes_available);
+                    setStatus(data.status);
+                    // Only update if not optimistically set
+                    // actually, server is truth, allow overwrite
+                    setUserDone(data.user_completed_today);
+                    setPartnerDone(data.partner_completed_today);
+
+                    setBossData({
+                        hp: data.boss_hp ?? 10000,
+                        maxHp: data.boss_max_hp ?? 10000,
+                        name: data.boss_name || "The Sloth King",
+                        imageIndex: data.boss_image_index ?? 0
+                    });
+                } else {
+                    setTeamCode("NO TEAM");
+                }
+            }
+
+            const chal = await api.getChallenge(token);
+            if (chal) setChallengeData(chal);
+
+            const hist = await api.getHistory(token);
+            if (hist) setHistory(hist);
+        } catch (error) {
+            console.log("Error fetching data:", error);
+        } finally {
+            setRefreshing(false);
         }
-
-        const chal = await api.getChallenge(token);
-        if (chal) setChallengeData(chal);
-
-        const hist = await api.getHistory(token);
-        if (hist) setHistory(hist);
-
-        setRefreshing(false);
     };
 
     const handleRefresh = () => {
@@ -126,25 +156,36 @@ export default function DashboardScreen() {
     };
 
     const handleComplete = async () => {
+        console.log("🟢 HandleComplete Triggered in Dashboard!");
         const token = await AsyncStorage.getItem('userToken');
         if (token) {
-            // Optimistic Update
-            setUserDone(true);
+            console.log("🟢 Token found, sending API request...");
+            setUserDone(true); // Optimistic update
+
+            // Force re-render to show spinner or something? 
+            // setRefreshing(true); // Maybe not, might be jarring.
+
             setTeamCompletionCount(prev => prev + 1);
 
-            // Log Workout
             const damage = 500;
+            console.log(`🟢 Logging workout with damage: ${damage}`);
             const res = await api.logWorkout(token, damage);
+            console.log("🟢 API Response for Workout:", JSON.stringify(res));
 
             if (res.status === 'success' || res.status === 'logged' || res.status === 'streak_incremented') {
-                fetchData(); // Refresh to get official status
+                console.log("🟢 Success! Refreshing data...");
+                fetchData();
 
-                // --- CHECK FOR SECRET SCROLL ---
                 if (res.new_fact) {
+                    console.log("📜 New Fact unlocked!");
                     setUnlockedFact(res.new_fact);
                     setTimeout(() => setScrollVisible(true), 1000);
                 }
+            } else {
+                console.log("🔴 API returned non-success status:", res.status);
             }
+        } else {
+            console.log("🔴 No User Token found in AsyncStorage!");
         }
     };
 
@@ -158,160 +199,205 @@ export default function DashboardScreen() {
         return <View style={styles.container} />;
     }
 
+    const insets = useSafeAreaInsets(); // Need to add import!
+
     return (
-        <SafeAreaView style={styles.container} edges={['top']}>
-            <StatusBar style="dark" />
-            {/* Note: I removed the noise image to satisfy the bundler until asset is restored */}
+        <ImageBackground
+            source={require('../assets/images/fitness_bg.png')}
+            style={styles.backgroundImage}
+            resizeMode="cover"
+        >
+            <View style={styles.container}>
+                <StatusBar style="dark" translucent={true} backgroundColor="transparent" />
 
-            {/* HEADER */}
-            <BlurView intensity={80} tint="light" style={styles.headerGlass}>
-                <View style={styles.headerContent}>
-                    <View style={styles.statsRow}>
-                        <View style={styles.statPill}>
-                            <MaterialCommunityIcons name="heart" size={20} color="#EF4444" />
-                            <Text style={styles.statText}>{hearts}</Text>
-                        </View>
-                        <View style={styles.statPill}>
-                            <MaterialCommunityIcons name="fire" size={20} color="#F97316" />
-                            <Text style={styles.statText}>{streak}</Text>
-                        </View>
-                        <View style={styles.statPill}>
-                            <MaterialCommunityIcons name="snowflake" size={20} color="#3B82F6" />
-                            <Text style={styles.statText}>{freezes}</Text>
-                        </View>
-                    </View>
-
-                    <View style={styles.headerRight}>
-                        {/* GRIMOIRE BUTTON */}
-                        <TouchableOpacity onPress={() => setGrimoireVisible(true)} style={styles.iconButton}>
-                            <MaterialCommunityIcons name="book-variant" size={24} color="#78350F" />
-                        </TouchableOpacity>
-
-                        <TouchableOpacity onPress={() => setProfileVisible(true)} style={styles.iconButton}>
-                            <MaterialCommunityIcons name="cog" size={24} color="#4B5563" />
-                        </TouchableOpacity>
-                    </View>
-                </View>
-
-                {/* VISUAL TEAM STATUS */}
-                <View style={styles.teamStatusContainer}>
-                    <View style={styles.avatarRow}>
-                        {/* 1. YOU */}
-                        <View style={[styles.avatarCircle, userDone ? styles.avatarDone : styles.avatarNotReady]}>
-                            <Text style={styles.avatarLabel}>YOU</Text>
-                            {userDone && (
-                                <View style={styles.checkBadge}>
-                                    <MaterialCommunityIcons name="check" size={12} color="white" />
-                                </View>
-                            )}
-                        </View>
-
-                        {/* CONNECTOR LINE */}
-                        <View style={[styles.connectorLine, (status === 'SAFE') ? { backgroundColor: '#10B981' } : { backgroundColor: '#E5E7EB' }]} />
-
-                        {/* 2. PARTNER(S) */}
-                        <View style={[styles.avatarCircle, partnerDone ? styles.avatarDone : styles.avatarNotReady]}>
-                            <Text style={styles.avatarLabel}>TEAM</Text>
-                            {partnerDone && (
-                                <View style={styles.checkBadge}>
-                                    <MaterialCommunityIcons name="check" size={12} color="white" />
-                                </View>
-                            )}
+                {/* HEADER - Slim Stats Only */}
+                {/* Remove fixed height, add top padding for safe area */}
+                <BlurView intensity={100} tint="light" style={[styles.headerGlass, { paddingTop: insets.top, paddingBottom: 2 }]}>
+                    <View style={styles.headerContent}>
+                        <View style={styles.statsRow}>
+                            <View style={styles.statPill}>
+                                <MaterialCommunityIcons name="heart" size={20} color="#EF4444" />
+                                <Text style={styles.statText}>{hearts}</Text>
+                            </View>
+                            <View style={styles.statPill}>
+                                <MaterialCommunityIcons name="fire" size={20} color="#F97316" />
+                                <Text style={styles.statText}>{streak}</Text>
+                            </View>
+                            <View style={styles.statPill}>
+                                <MaterialCommunityIcons name="snowflake" size={20} color="#3B82F6" />
+                                <Text style={styles.statText}>{freezes}</Text>
+                            </View>
                         </View>
                     </View>
-                </View>
-            </BlurView>
+                </BlurView>
 
-            <ScrollView
-                contentContainerStyle={styles.scrollContent}
-                refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />}
-            >
-                {/* 1. BOSS BATTLE */}
-                <BossWidget
-                    hp={bossData.hp}
-                    maxHp={bossData.maxHp}
-                    name={bossData.name}
+                <ScrollView
+                    contentContainerStyle={styles.scrollContent}
+                    refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />}
+                >
+                    {/* 1. TEAM STATUS WIDGET (Moved from Header) */}
+                    <View style={styles.teamStatusCard}>
+                        <View style={styles.avatarRow}>
+                            {/* 1. YOU */}
+                            <View style={[styles.avatarCircle, userDone ? styles.avatarDone : styles.avatarNotReady]}>
+                                <Text style={styles.avatarLabel}>YOU</Text>
+                                {userDone && (
+                                    <View style={styles.checkBadge}>
+                                        <MaterialCommunityIcons name="check" size={12} color="white" />
+                                    </View>
+                                )}
+                            </View>
+
+                            {/* CONNECTOR LINE */}
+                            <View style={[styles.connectorLine, (status === 'SAFE') ? { backgroundColor: '#10B981' } : { backgroundColor: '#E5E7EB' }]} />
+
+                            {/* 2. PARTNER(S) */}
+                            <View style={[styles.avatarCircle, partnerDone ? styles.avatarDone : styles.avatarNotReady]}>
+                                <Text style={styles.avatarLabel}>TEAM</Text>
+                                {partnerDone && (
+                                    <View style={styles.checkBadge}>
+                                        <MaterialCommunityIcons name="check" size={12} color="white" />
+                                    </View>
+                                )}
+                            </View>
+                        </View>
+                        <Text style={styles.teamStatusText}>{status === 'SAFE' ? "Streak Safe!" : "Workout Needed!"}</Text>
+                    </View>
+
+                    {/* 2. BOSS BATTLE */}
+                    <BossWidget
+                        hp={bossData.hp}
+                        maxHp={bossData.maxHp}
+                        name={bossData.name}
+                    />
+
+                    {/* 2. CHALLENGE CARD - QUEST GIVER */}
+                    <ChallengeOfTheDay
+                        challengeText={challengeData.text}
+                        onComplete={handleComplete}
+                        isCompleted={userDone}
+                        mascotStatus={getMascotStatus()}
+                    />
+
+                    {/* 3. JOURNEY MAP */}
+                    <View style={styles.mapContainer}>
+                        <JourneyMap history={history} />
+                    </View>
+
+                </ScrollView>
+
+                <ProfileModal
+                    visible={profileVisible}
+                    onClose={() => setProfileVisible(false)}
+                    code={teamCode}
+                    onDebug={() => setDebugVisible(true)}
+                    onReplayTutorial={() => setTutorialVisible(true)}
+                    session={session}
                 />
 
-                {/* 2. CHALLENGE CARD - QUEST GIVER */}
-                <ChallengeOfTheDay
-                    challengeText={challengeData.text}
-                    onComplete={handleComplete}
-                    isCompleted={userDone}
-                    mascotStatus={getMascotStatus()}
+                <DebugMenu
+                    visible={debugVisible}
+                    onClose={() => setDebugVisible(false)}
+                    onReset={async () => {
+                        await AsyncStorage.clear();
+                        await supabase.auth.signOut();
+                        router.replace('/');
+                    }}
+                    token=""
                 />
 
-                {/* 3. JOURNEY MAP */}
-                <View style={styles.mapContainer}>
-                    <Text style={styles.sectionTitle}>YOUR JOURNEY</Text>
-                    <JourneyMap history={history} />
-                </View>
+                {/* TUTORIAL MODAL */}
+                <Modal visible={tutorialVisible} animationType="slide">
+                    <TutorialScreen onComplete={async () => {
+                        await AsyncStorage.setItem('tutorial_completed', 'true');
+                        setTutorialVisible(false);
+                    }} />
+                </Modal>
 
-            </ScrollView>
+                {/* GRIMOIRE MODAL */}
+                <GrimoireModal
+                    visible={grimoireVisible}
+                    onClose={() => setGrimoireVisible(false)}
+                />
 
-            <ProfileModal
-                visible={profileVisible}
-                onClose={() => setProfileVisible(false)}
-                code={teamCode}
-                onDebug={() => setDebugVisible(true)}
-                onReplayTutorial={() => setTutorialVisible(true)}
-                session={{ user: { email: 'Duo' } }}
-            />
+                {/* BOTTOM TAB BAR */}
+                <BlurView intensity={100} tint="light" style={styles.bottomTabBar}>
+                    <TouchableOpacity onPress={() => { setGrimoireVisible(true); setProfileVisible(false); }} style={styles.tabButton}>
+                        <MaterialCommunityIcons
+                            name="book-variant"
+                            size={28}
+                            color={grimoireVisible ? "#10B981" : "#D1D5DB"} // Green if active, Light Grey if inactive
+                        />
+                        <Text style={[styles.tabLabel, { color: grimoireVisible ? "#10B981" : "#D1D5DB" }]}>Grimoire</Text>
+                    </TouchableOpacity>
 
-            <DebugMenu
-                visible={debugVisible}
-                onClose={() => setDebugVisible(false)}
-                onReset={() => { }}
-                token=""
-            />
+                    <TouchableOpacity onPress={() => { setGrimoireVisible(false); setProfileVisible(false); }} style={styles.tabButton}>
+                        <MaterialCommunityIcons
+                            name="home"
+                            size={32}
+                            color={(!grimoireVisible && !profileVisible) ? "#10B981" : "#D1D5DB"}
+                        />
+                        {/* Optional Label */}
+                        {/* <Text style={[styles.tabLabel, { color: (!grimoireVisible && !profileVisible) ? "#10B981" : "#D1D5DB" }]}>Home</Text> */}
+                    </TouchableOpacity>
 
-            {/* TUTORIAL MODAL */}
-            <Modal visible={tutorialVisible} animationType="slide">
-                <TutorialScreen onComplete={async () => {
-                    await AsyncStorage.setItem('tutorial_completed', 'true');
-                    setTutorialVisible(false);
-                }} />
-            </Modal>
+                    <TouchableOpacity onPress={() => { setProfileVisible(true); setGrimoireVisible(false); }} style={styles.tabButton}>
+                        <MaterialCommunityIcons
+                            name="cog"
+                            size={28}
+                            color={profileVisible ? "#10B981" : "#D1D5DB"}
+                        />
+                        <Text style={[styles.tabLabel, { color: profileVisible ? "#10B981" : "#D1D5DB" }]}>Profile</Text>
+                    </TouchableOpacity>
+                </BlurView>
 
-
-
-        </SafeAreaView>
+            </View>
+        </ImageBackground>
     );
 }
 
 const styles = StyleSheet.create({
+    backgroundImage: {
+        flex: 1,
+        width: '100%',
+        height: '100%'
+    },
     container: {
         flex: 1,
-        backgroundColor: '#F9FAFB',
+        backgroundColor: 'transparent', // Ensure no white bg
+        // paddingTop: 0, // Explicitly 0
     },
     headerGlass: {
         width: '100%',
-        paddingTop: Platform.OS === 'android' ? 40 : 0,
-        paddingBottom: 20,
+        // paddingTop: 0, // Handled dynamically
+        // height: 50,    // Handled dynamically
         borderBottomWidth: 1,
-        borderBottomColor: 'rgba(255,255,255,0.5)',
+        borderBottomColor: '#E5E7EB',
         zIndex: 50,
+        backgroundColor: '#FFFFFF', // Solid white
     },
     headerContent: {
         flexDirection: 'row',
-        justifyContent: 'space-between',
+        justifyContent: 'center',
         alignItems: 'center',
         paddingHorizontal: 20,
-        height: 60,
+        paddingBottom: 2, // Minimal bottom padding
+        width: '100%',
     },
     statsRow: {
         flexDirection: 'row',
-        gap: 12,
+        gap: 15,
+        width: '100%',
+        justifyContent: 'space-around'
     },
     statPill: {
         flexDirection: 'row',
         alignItems: 'center',
         backgroundColor: 'rgba(255,255,255,0.8)',
-        paddingHorizontal: 10,
-        paddingVertical: 6,
-        borderRadius: 20,
-        gap: 6,
-        // Shadow
+        paddingHorizontal: 8,
+        paddingVertical: 2, // Ultra slim
+        borderRadius: 16,
+        gap: 4,
         shadowColor: "#000",
         shadowOffset: { width: 0, height: 2 },
         shadowOpacity: 0.05,
@@ -332,7 +418,6 @@ const styles = StyleSheet.create({
         backgroundColor: 'rgba(255,255,255,0.5)',
         borderRadius: 12
     },
-    // TEAM STATUS
     teamStatusContainer: {
         width: '100%',
         alignItems: 'center',
@@ -341,7 +426,7 @@ const styles = StyleSheet.create({
     avatarRow: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 15 // Gap between circles
+        gap: 15
     },
     connectorLine: {
         width: 40,
@@ -392,7 +477,7 @@ const styles = StyleSheet.create({
     mapContainer: {
         width: '100%',
         marginTop: 20,
-        backgroundColor: 'white',
+        backgroundColor: 'rgba(255,255,255,0.9)', // Slight opacity for map bg
         borderRadius: 24,
         padding: 20,
         marginBottom: 40,
@@ -408,5 +493,57 @@ const styles = StyleSheet.create({
         color: '#9CA3AF',
         marginBottom: 20,
         letterSpacing: 1
+    },
+    // New Team Status Card Styles
+    teamStatusCard: {
+        backgroundColor: 'rgba(255,255,255,0.9)',
+        borderRadius: 24,
+        paddingVertical: 15,
+        paddingHorizontal: 30,
+        marginBottom: 24,
+        alignItems: 'center',
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 8,
+        elevation: 4,
+        width: '100%', // full width of container padding
+        maxWidth: 350
+    },
+    teamStatusText: {
+        marginTop: 10,
+        fontSize: 12,
+        fontWeight: '700',
+        color: '#6B7280',
+        textTransform: 'uppercase',
+        letterSpacing: 1
+    },
+    bottomTabBar: {
+        position: 'absolute',
+        bottom: 0,
+        width: '100%',
+        flexDirection: 'row',
+        backgroundColor: '#FFFFFF', // Solid white for clean look, or keep blur if preferred. Duolingo is solid/translucent. Let's keep BlurView but style it solid-ish. 
+        // Actually Dashboard uses BlurView component, so this bg color acts as tint if intensity is low. 
+        // But for Duolingo style, usually it is solid border top.
+        borderTopWidth: 1,
+        borderTopColor: '#E5E7EB',
+        paddingHorizontal: 20,
+        paddingTop: 12,
+        paddingBottom: 30, // Extra padding for Home Indicator
+        justifyContent: 'space-around', // Key for even spacing
+        alignItems: 'center',
+        elevation: 0, // Flat look usually
+    },
+    tabButton: {
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 4,
+        flex: 1, // Hit target optimization
+    },
+    tabLabel: {
+        fontSize: 10,
+        fontWeight: '700',
+        color: '#6B7280'
     }
 });

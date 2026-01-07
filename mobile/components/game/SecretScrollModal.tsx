@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, Modal, TouchableOpacity, Dimensions, Image } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import Animated, { useSharedValue, useAnimatedStyle, withSpring, withTiming, withSequence, RunOnJS } from 'react-native-reanimated';
+import Animated, { useSharedValue, useAnimatedStyle, withSpring, withTiming, withSequence, runOnJS } from 'react-native-reanimated';
 import { BlurView } from 'expo-blur';
 
 interface SecretScrollModalProps {
@@ -41,7 +41,7 @@ export default function SecretScrollModal({ visible, fact, onClose }: SecretScro
             withTiming('-5deg', { duration: 50 }),
             withTiming('5deg', { duration: 50 }),
             withTiming('0deg', { duration: 50 }, () => {
-                RunOnJS(setIsOpened)(true);
+                runOnJS(setIsOpened)(true);
                 contentOpacity.value = withTiming(1, { duration: 800 });
             })
         );

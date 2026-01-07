@@ -11,6 +11,9 @@ from pydantic import BaseModel
 from supabase import create_client, Client
 from dotenv import load_dotenv
 
+from app.schemas import TeamResponse, JoinRequest
+from app.auth import get_authenticated_client
+
 load_dotenv()
 
 app = FastAPI()
@@ -323,42 +326,7 @@ def get_dashboard(auth: tuple = Depends(get_authenticated_client)):
     }
 
 # 4. Update 'log_workout' to save the Date
-@app.post("/workout")
-def log_workout(auth: tuple = Depends(get_authenticated_client)):
-    user_id, client = auth
-    profile = client.table("profiles").select("team_id").eq("id", user_id).execute()
-    team_id = profile.data[0]['team_id']
-    
-    payload = {}
-    try:
-        # Pydantic/FastAPI might have consumed body already? 
-        # Actually in this setup we are not using a Pydantic model for body in the signature
-        # We need to read the body.
-        # But 'log_workout' signature above doesn't take a Request object.
-        # WAIT: Previous tools edits might have messed up the signature.
-        # Let's assume standard FastAPI Request usage or dependency if we want body.
-        # The previous successful edits didn't show the signature change to include Request.
-        # However, checking the file previously, we saw:
-        # def log_workout(auth: tuple = Depends(get_authenticated_client), payload: dict = Body(...)):
-        # Ah, I need to check the current signature in the file to be safe.
-        pass
-    except:
-        pass
 
-    # RE-READING line 296 from context provided in Step 831:
-    # def log_workout(auth: tuple = Depends(get_authenticated_client)):
-    # This refuses the body payload! I need to fix the signature to accept the body.
-    return {"error": "Signature mismatch in previous context, fixing now"} 
-
-# WAIT, I see I cannot change the signature in this tool call easily if I don't see it fully.
-# The previous `log_workout` context (Step 832) shows lines 296+.
-# It seems I might have defined it without `request: Request` or a Pydantic model?
-# Actually, the previously applied edits were applied to `log_workout`.
-# Let's look at the `log_workout` definition again in Step 831.
-# Line 296: def log_workout(auth: tuple = Depends(get_authenticated_client)):
-# If I want to read `payload`, I need to add it to the signature!
-# But wait, specific editing instructions were used previously.
-# Let's rely on FastAPI features. I will add `payload: dict = Body(...)` to signature.
 
 @app.post("/workout")
 def log_workout(

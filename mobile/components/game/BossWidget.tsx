@@ -38,9 +38,9 @@ export default function BossWidget({ hp, maxHp, name }: BossWidgetProps) {
             <View style={styles.barTrack}>
                 <Animated.View style={[styles.barFillWrapper, barStyle]}>
                     <LinearGradient
-                        colors={['#A3E635', '#22C55E']} // Lime -> Green Liquid Energy
+                        colors={['#bef264', '#22c55e', '#15803d']} // 3D Cylinder Effect: Highlight -> Normal -> Shadow
                         start={{ x: 0, y: 0 }}
-                        end={{ x: 1, y: 0 }}
+                        end={{ x: 0, y: 1 }}
                         style={styles.gradientFill}
                     />
                 </Animated.View>
@@ -85,19 +85,26 @@ const styles = StyleSheet.create({
         color: '#6B7280'
     },
     barTrack: {
-        height: 28, // Chunky
-        backgroundColor: '#1F2937', // Dark Gray/Black Track
-        borderRadius: 14, // Pill shape
+        height: 34, // Taller
+        backgroundColor: '#1F2937',
+        borderRadius: 17,
         overflow: 'hidden',
-        borderWidth: 2,
-        borderColor: '#374151', // Dark border
+        borderWidth: 3,
+        borderColor: '#4B5563', // Outer rim
+        borderBottomWidth: 6, // 3D Depth
+        borderBottomColor: '#111827', // Deep shadow
         position: 'relative',
-        justifyContent: 'center'
+        justifyContent: 'center',
+        // Shadow
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.3,
+        shadowRadius: 5,
+        elevation: 8
     },
     barFillWrapper: {
         height: '100%',
-        borderRadius: 14,
-        overflow: 'hidden',
+        borderRadius: 0, // Fill doesn't need radius if track clips it, but safer to match? Track overflows hidden handles it.
     },
     gradientFill: {
         width: '100%',
@@ -106,7 +113,7 @@ const styles = StyleSheet.create({
     iconContainer: {
         position: 'absolute',
         right: 12,
-        top: 2, // Centered vertically roughly
+        top: 4, // Centered visually w/ thicc border
         zIndex: 10
     }
 });

@@ -66,9 +66,15 @@ export const api = {
                 headers: getHeaders(token),
                 body: JSON.stringify({ damage, duration_minutes: durationMinutes })
             });
+            if (!response.ok) {
+                const text = await response.text();
+                console.error("🔴 API Workout Failed:", response.status, text);
+                return { status: "error", detail: text };
+            }
             return await response.json();
         } catch (error) {
-            return { status: "error" };
+            console.error("🔴 API Network/Parse Error in logWorkout:", error);
+            return { status: "error", error };
         }
     },
 

@@ -14,7 +14,7 @@ interface ChallengeOfTheDayProps {
 const SLIDER_WIDTH = 250;
 const SLIDER_HEIGHT = 60;
 const THUMB_SIZE = 50;
-const SWIPE_THRESHOLD = SLIDER_WIDTH * 0.7;
+
 
 const MESSAGES = {
     SAFE: ["See you tomorrow! ⚡", "We crushed it! 🎉", "Wohooo 🎉 ", "High five! ✋"],
@@ -69,29 +69,49 @@ export default function ChallengeOfTheDay({ challengeText, onComplete, isComplet
         PanResponder.create({
             onStartShouldSetPanResponder: () => !isCompleted,
             onMoveShouldSetPanResponder: () => !isCompleted,
+            onPanResponderTerminationRequest: () => false, // KEY FIX: Prevent ScrollView from stealing control
+            onShouldBlockNativeResponder: () => true,
+
             onPanResponderGrant: () => {
                 setSliderActive(true);
+                // We keep the offset logic, but ensure we don't jump if re-grabbing? 
+                // Actually for a simple slider, usually we reset or continue.
+                // Current logic: pan.setOffset... this assumes we want to add to existing. 
+                // But if we reset on release (if failed), offset is cleared.
+                // If we succeeded, we are done.
                 pan.setOffset({
                     x: (pan.x as any)._value,
                     y: 0
                 });
             },
             onPanResponderMove: (_, gestureState) => {
-                if (gestureState.dx > 0 && gestureState.dx < SLIDER_WIDTH - THUMB_SIZE) {
-                    pan.setValue({ x: gestureState.dx, y: 0 });
-                }
+                // Bounds Calculation (Total Width - Thumb - Padding * 2)
+                const MAX_RANGE = SLIDER_WIDTH - THUMB_SIZE - 10;
+
+                // Allow drag even if outside bounds (but clamp result)
+                let newX = gestureState.dx;
+                // Clamp
+                if (newX < 0) newX = 0;
+                if (newX > MAX_RANGE) newX = MAX_RANGE;
+
+                pan.setValue({ x: newX, y: 0 });
             },
             onPanResponderRelease: (_, gestureState) => {
-                pan.flattenOffset();
-                if (gestureState.dx > SWIPE_THRESHOLD) {
+                pan.flattenOffset(); // Flatten so the offset becomes part of the base value
+
+                const MAX_RANGE = SLIDER_WIDTH - THUMB_SIZE - 10;
+
+                // Check if we crossed the threshold (e.g. 70% of max range)
+                if (gestureState.dx > MAX_RANGE * 0.7) {
                     onComplete();
                     // Snap to end visually
                     RNAnimated.timing(pan, {
-                        toValue: { x: SLIDER_WIDTH - THUMB_SIZE - 10, y: 0 },
+                        toValue: { x: MAX_RANGE, y: 0 },
                         duration: 200,
                         useNativeDriver: false
                     }).start();
                 } else {
+                    // Reset
                     resetSlider();
                 }
             }
@@ -168,6 +188,7 @@ export default function ChallengeOfTheDay({ challengeText, onComplete, isComplet
                                 backgroundColor: isCompleted ? '#9CA3AF' : 'white'
                             }
                         ]}
+                        hitSlop={{ top: 30, bottom: 30, left: 30, right: 50 }} // KEY FIX: Easier to grab
                         {...panResponder.panHandlers}
                     >
                         <MaterialCommunityIcons
@@ -198,7 +219,7 @@ const styles = StyleSheet.create({
     // MASCOT
     mascotContainer: {
         position: 'absolute',
-        top: -50, // Reduced overlap (was -75) - just peeking now
+        top: -20, // Lowered to avoid overlap with Boss HP bar (was -50)
         right: 0, // Align flush with right edge
         width: 150, // Slightly smaller to be less overwhelming? Or keep 160. Let's try 150.
         height: 150,
@@ -251,21 +272,22 @@ const styles = StyleSheet.create({
     },
     // CARD
     card: {
-        backgroundColor: 'white',
+        backgroundColor: '#FFFFFF', // Pure White
         width: '100%',
         borderRadius: 32,
         paddingVertical: 24,
         paddingHorizontal: 20,
         // Align content to LEFT
         alignItems: 'flex-start',
-        // Drop Shadow
-        shadowColor: "#059669", // Greenish shadow
-        shadowOffset: { width: 0, height: 10 },
-        shadowOpacity: 0.15,
-        shadowRadius: 20,
-        elevation: 10,
+        // Drop Shadow - Vibrant Blue/Purple
+        shadowColor: "#4F46E5", // Indigo-600
+        shadowOffset: { width: 0, height: 12 },
+        shadowOpacity: 0.2, // Slightly stronger for "pop"
+        shadowRadius: 24,
+        elevation: 12,
+        // Removed grey border to reduce "muddy" look, or stick to very subtle
         borderWidth: 1,
-        borderColor: '#F3F4F6'
+        borderColor: 'rgba(255,255,255,0.5)' // White border for highlight? Or just remove.
     },
     headerLabel: {
         fontSize: 11,
