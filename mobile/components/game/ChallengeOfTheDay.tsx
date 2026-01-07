@@ -26,6 +26,12 @@ export default function ChallengeOfTheDay({ challengeText, onComplete, isComplet
     const isHero = type === 'spot_cover';
     const isCritical = type === 'critical';
 
+    // Ref to track completion for PanResponder which is created once
+    const isCompletedRef = useRef(isCompleted);
+    useEffect(() => {
+        isCompletedRef.current = isCompleted;
+    }, [isCompleted]);
+
     // COLORS
     let mainColor = '#58CC02'; // Green
     if (isHero) mainColor = '#3B82F6'; // Blue
@@ -67,9 +73,18 @@ export default function ChallengeOfTheDay({ challengeText, onComplete, isComplet
 
     const panResponder = useRef(
         PanResponder.create({
-            onStartShouldSetPanResponder: () => !isCompleted,
-            onMoveShouldSetPanResponder: () => !isCompleted,
-            onPanResponderTerminationRequest: () => false, // KEY FIX: Prevent ScrollView from stealing control
+            // Fix: Check isCompleted ref or prop. Since this creates on first render, 
+            // the closure might capture initial 'false'.
+            // Using a ref for isCompleted would be safer if we didn't re-create PanResponder.
+            // But actually we are using useRef(PanResponder.create(...)).current.
+            // This means 'isCompleted' inside here is STALE (always false from first render).
+
+            // WE MUST create PanResponder inside useMemo dependent on [isCompleted], OR use a ref tracking it.
+            // Let's use a ref to track completion status so the closure reads up-to-date value.
+            onStartShouldSetPanResponder: () => !isCompletedRef.current,
+            onMoveShouldSetPanResponder: () => !isCompletedRef.current,
+
+            onPanResponderTerminationRequest: () => false,
             onShouldBlockNativeResponder: () => true,
 
             onPanResponderGrant: () => {
@@ -154,13 +169,26 @@ export default function ChallengeOfTheDay({ challengeText, onComplete, isComplet
             <View style={styles.card}>
 
                 {/* HEADER LABEL */}
+                {/* WATERMARK */}
+                <View style={styles.watermarkContainer}>
+                    <MaterialCommunityIcons name="dumbbell" size={120} color="#000" />
+                </View>
+
                 <Text style={[styles.headerLabel, isCritical && { color: '#EF4444' }]}>
                     {isCritical ? "⚠️ CRITICAL FAILURE" : "CHALLENGE OF THE DAY"}
                 </Text>
 
-                {/* HUGE TASK TEXT */}
                 <Text style={styles.hugeText}>
-                    {isCompleted ? "DONE!" : challengeText}
+                    {isCompleted ? "DONE!" : (
+                        // Regex to find the number and style it
+                        // e.g. "Walk 10,000 steps" -> ["Walk ", "10,000", " steps"]
+                        challengeText.split(/(\d+(?:,\d+)*)/).map((part, index) => {
+                            if (/^\d+(?:,\d+)*$/.test(part)) {
+                                return <Text key={index} style={{ fontSize: 64, color: '#F97316' }}>{part}</Text>;
+                            }
+                            return <Text key={index} style={{ fontSize: 32, color: '#1F2937' }}>{part}</Text>;
+                        })
+                    )}
                 </Text>
 
                 {/* SLIDER BUTTON */}
@@ -211,31 +239,31 @@ export default function ChallengeOfTheDay({ challengeText, onComplete, isComplet
 const styles = StyleSheet.create({
     container: {
         width: '100%',
-        alignItems: 'center', // Center the card wrapper
+        alignItems: 'center',
         position: 'relative',
-        marginTop: 40, // Increased spacing from element above
-        marginBottom: 40
+        marginTop: 60, // More space for mascot head
+        marginBottom: 70, // More space for hanging button
+        paddingHorizontal: 20, // ensure card considers screen padding if distinct
     },
-    // MASCOT
+    // MASCOT - FRONT (Peeking Over)
     mascotContainer: {
         position: 'absolute',
-        top: -20, // Lowered to avoid overlap with Boss HP bar (was -50)
-        right: 0, // Align flush with right edge
-        width: 150, // Slightly smaller to be less overwhelming? Or keep 160. Let's try 150.
-        height: 150,
-        zIndex: 20,
-        elevation: 20,
-        alignItems: 'center'
+        top: -55,
+        right: 20,
+        width: 80,
+        height: 80,
+        zIndex: 20, // Sit ON TOP of the card
+        transform: [{ rotate: '15deg' }],
     },
     mascotImage: {
         width: '100%',
         height: '100%',
     },
-    // SPEECH BUBBLE
+    // ...
     speechBubble: {
         position: 'absolute',
-        top: -30, // Adjusted relative to new mascot size
-        right: 30,
+        top: -60, // Move up with mascot
+        right: 40,
         backgroundColor: 'white',
         paddingHorizontal: 12,
         paddingVertical: 8,
@@ -244,9 +272,9 @@ const styles = StyleSheet.create({
         shadowOffset: { width: 0, height: 2 },
         shadowOpacity: 0.15,
         shadowRadius: 4,
-        elevation: 5,
+        elevation: 30,
         zIndex: 30,
-        maxWidth: 140, // More width
+        maxWidth: 140,
     },
     speechText: {
         fontSize: 12,
@@ -272,63 +300,77 @@ const styles = StyleSheet.create({
     },
     // CARD
     card: {
-        backgroundColor: '#FFFFFF', // Pure White
+        backgroundColor: '#FFFFFF',
         width: '100%',
-        borderRadius: 32,
-        paddingVertical: 24,
-        paddingHorizontal: 20,
-        // Align content to LEFT
-        alignItems: 'flex-start',
-        // Drop Shadow - Vibrant Blue/Purple
-        shadowColor: "#4F46E5", // Indigo-600
-        shadowOffset: { width: 0, height: 12 },
-        shadowOpacity: 0.2, // Slightly stronger for "pop"
-        shadowRadius: 24,
-        elevation: 12,
-        // Removed grey border to reduce "muddy" look, or stick to very subtle
-        borderWidth: 1,
-        borderColor: 'rgba(255,255,255,0.5)' // White border for highlight? Or just remove.
+        borderRadius: 30, // Squircle-ish
+        paddingTop: 40,
+        paddingBottom: 60, // Extra space for content + visual balance
+        paddingHorizontal: 24,
+        alignItems: 'center', // Center text
+        zIndex: 10, // Above mascot
+        // Shadow
+        shadowColor: "#4F46E5",
+        shadowOffset: { width: 0, height: 10 },
+        shadowOpacity: 0.1,
+        shadowRadius: 20,
+        elevation: 10,
+        overflow: 'visible', // Allow button to hang out? No, button is absolute. 
+        // If overflow hidden, button clips. Must be visible.
+    },
+    // WATERMARK (New)
+    watermarkContainer: {
+        position: 'absolute',
+        top: '10%',
+        left: '5%',
+        opacity: 0.05,
+        zIndex: 0,
+        transform: [{ rotate: '-10deg' }]
     },
     headerLabel: {
-        fontSize: 11,
-        fontWeight: '900',
+        fontSize: 12,
+        fontWeight: '800',
         color: '#9CA3AF',
-        letterSpacing: 2,
+        letterSpacing: 3,
         textTransform: 'uppercase',
-        marginBottom: 8
+        marginBottom: 10,
+        textAlign: 'center'
     },
     hugeText: {
-        fontSize: 32,
+        fontSize: 42, // Massive
         fontWeight: '900',
         color: '#1F2937',
-        textAlign: 'left', // Left align
-        marginBottom: 24,
-        lineHeight: 36,
-        width: '70%', // Leave room for mascot on right
+        textAlign: 'center',
+        marginBottom: 10,
+        lineHeight: 46,
+        zIndex: 1, // On top of watermark
     },
     // SLIDER
     sliderContainer: {
+        position: 'absolute', // Break out!
+        bottom: -SLIDER_HEIGHT / 2, // Hang 50% off bottom
         width: SLIDER_WIDTH,
         height: SLIDER_HEIGHT,
         borderRadius: SLIDER_HEIGHT / 2,
-        position: 'relative',
         justifyContent: 'center',
-        // Shadow for the button itself
-        shadowColor: "#000",
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.1,
-        shadowRadius: 10,
-        elevation: 5,
-        backgroundColor: 'white', // Container bg
-        alignSelf: 'center', // Keep slider centered or 'flex-start'
-        marginTop: 10
+
+        // Heavy Color Shadow
+        shadowColor: "#3B82F6", // Blue glow
+        shadowOffset: { width: 0, height: 8 },
+        shadowOpacity: 0.3,
+        shadowRadius: 12,
+        elevation: 15, // High elevation
+
+        backgroundColor: 'white',
+        borderWidth: 4,
+        borderColor: 'white', // Explicit white border as requested
+        zIndex: 20, // Top most
     },
     sliderTrack: {
         position: 'absolute',
         width: '100%',
         height: '100%',
         borderRadius: SLIDER_HEIGHT / 2,
-        backgroundColor: '#F3F4F6', // Light gray track
+        backgroundColor: '#F3F4F6',
         overflow: 'hidden'
     },
     sliderFill: {
@@ -345,16 +387,19 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         flexDirection: 'row',
         zIndex: 1,
-        paddingLeft: 40 // Offset for thumb
+        paddingLeft: 40
     },
     sliderHintText: {
-        color: 'white',
+        color: '#9CA3AF', // Lighter text on white bg? Or white on color fill? 
+        // Wait, track is start transparent/white. Fill covers it.
+        // Let's keep white for text assuming it's visible? 
+        // Actually if track is grey, text should be grey? 
+        // User didn't specify, but "Slide to complete" usually on track.
+        // Let's keep it white and assume strong shadow/contrast or maybe grey if track is light.
+        // Let's go with Silver for hint text if on empty track.
         fontWeight: '900',
         fontSize: 14,
         letterSpacing: 1,
-        textShadowColor: 'rgba(0,0,0,0.1)',
-        textShadowOffset: { width: 0, height: 1 },
-        textShadowRadius: 2
     },
     sliderThumb: {
         width: THUMB_SIZE,
@@ -362,7 +407,7 @@ const styles = StyleSheet.create({
         borderRadius: THUMB_SIZE / 2,
         backgroundColor: 'white',
         position: 'absolute',
-        left: 5, // Padding start
+        left: 5,
         justifyContent: 'center',
         alignItems: 'center',
         zIndex: 10,
@@ -373,10 +418,10 @@ const styles = StyleSheet.create({
         elevation: 4
     },
     footerText: {
-        marginTop: 15,
+        marginTop: 10,
         color: '#10B981',
         fontWeight: 'bold',
-        fontSize: 13,
-        alignSelf: 'center'
+        fontSize: 12,
+        textAlign: 'center'
     }
 });

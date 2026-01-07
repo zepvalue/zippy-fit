@@ -210,149 +210,153 @@ export default function DashboardScreen() {
             <View style={styles.container}>
                 <StatusBar style="dark" translucent={true} backgroundColor="transparent" />
 
-                {/* HEADER - Slim Stats Only */}
-                {/* Remove fixed height, add top padding for safe area */}
-                <BlurView intensity={100} tint="light" style={[styles.headerGlass, { paddingTop: insets.top, paddingBottom: 2 }]}>
-                    <View style={styles.headerContent}>
-                        <View style={styles.statsRow}>
-                            <View style={styles.statPill}>
-                                <MaterialCommunityIcons name="heart" size={20} color="#EF4444" />
-                                <Text style={styles.statText}>{hearts}</Text>
-                            </View>
-                            <View style={styles.statPill}>
-                                <MaterialCommunityIcons name="fire" size={20} color="#F97316" />
-                                <Text style={styles.statText}>{streak}</Text>
-                            </View>
-                            <View style={styles.statPill}>
-                                <MaterialCommunityIcons name="snowflake" size={20} color="#3B82F6" />
-                                <Text style={styles.statText}>{freezes}</Text>
-                            </View>
+                {/* HEADER - Floating Stats (No Bar Background) */}
+                <View style={{
+                    position: 'absolute',
+                    top: 0,
+                    width: '100%',
+                    zIndex: 50,
+                    // PRO MOVE: Push it up into the status bar slightly for that flush magazine look
+                    paddingTop: Math.max(15, insets.top - 10),
+                    alignItems: 'center',
+                }}>
+                    <View style={styles.statsRow}>
+                        <View style={styles.statPill}>
+                            <MaterialCommunityIcons name="heart" size={20} color="#EF4444" />
+                            <Text style={styles.statText}>{hearts}</Text>
+                        </View>
+                        <View style={styles.statPill}>
+                            <MaterialCommunityIcons name="fire" size={20} color="#F97316" />
+                            <Text style={styles.statText}>{streak}</Text>
+                        </View>
+                        <View style={styles.statPill}>
+                            <MaterialCommunityIcons name="snowflake" size={20} color="#3B82F6" />
+                            <Text style={styles.statText}>{freezes}</Text>
                         </View>
                     </View>
-                </BlurView>
-
-                <ScrollView
-                    contentContainerStyle={styles.scrollContent}
-                    refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />}
-                >
-                    {/* 1. TEAM STATUS WIDGET (Moved from Header) */}
-                    <View style={styles.teamStatusCard}>
-                        <View style={styles.avatarRow}>
-                            {/* 1. YOU */}
-                            <View style={[styles.avatarCircle, userDone ? styles.avatarDone : styles.avatarNotReady]}>
-                                <Text style={styles.avatarLabel}>YOU</Text>
-                                {userDone && (
-                                    <View style={styles.checkBadge}>
-                                        <MaterialCommunityIcons name="check" size={12} color="white" />
-                                    </View>
-                                )}
-                            </View>
-
-                            {/* CONNECTOR LINE */}
-                            <View style={[styles.connectorLine, (status === 'SAFE') ? { backgroundColor: '#10B981' } : { backgroundColor: '#E5E7EB' }]} />
-
-                            {/* 2. PARTNER(S) */}
-                            <View style={[styles.avatarCircle, partnerDone ? styles.avatarDone : styles.avatarNotReady]}>
-                                <Text style={styles.avatarLabel}>TEAM</Text>
-                                {partnerDone && (
-                                    <View style={styles.checkBadge}>
-                                        <MaterialCommunityIcons name="check" size={12} color="white" />
-                                    </View>
-                                )}
-                            </View>
-                        </View>
-                        <Text style={styles.teamStatusText}>{status === 'SAFE' ? "Streak Safe!" : "Workout Needed!"}</Text>
-                    </View>
-
-                    {/* 2. BOSS BATTLE */}
-                    <BossWidget
-                        hp={bossData.hp}
-                        maxHp={bossData.maxHp}
-                        name={bossData.name}
-                    />
-
-                    {/* 2. CHALLENGE CARD - QUEST GIVER */}
-                    <ChallengeOfTheDay
-                        challengeText={challengeData.text}
-                        onComplete={handleComplete}
-                        isCompleted={userDone}
-                        mascotStatus={getMascotStatus()}
-                    />
-
-                    {/* 3. JOURNEY MAP */}
-                    <View style={styles.mapContainer}>
-                        <JourneyMap history={history} />
-                    </View>
-
-                </ScrollView>
-
-                <ProfileModal
-                    visible={profileVisible}
-                    onClose={() => setProfileVisible(false)}
-                    code={teamCode}
-                    onDebug={() => setDebugVisible(true)}
-                    onReplayTutorial={() => setTutorialVisible(true)}
-                    session={session}
-                />
-
-                <DebugMenu
-                    visible={debugVisible}
-                    onClose={() => setDebugVisible(false)}
-                    onReset={async () => {
-                        await AsyncStorage.clear();
-                        await supabase.auth.signOut();
-                        router.replace('/');
-                    }}
-                    token=""
-                />
-
-                {/* TUTORIAL MODAL */}
-                <Modal visible={tutorialVisible} animationType="slide">
-                    <TutorialScreen onComplete={async () => {
-                        await AsyncStorage.setItem('tutorial_completed', 'true');
-                        setTutorialVisible(false);
-                    }} />
-                </Modal>
-
-                {/* GRIMOIRE MODAL */}
-                <GrimoireModal
-                    visible={grimoireVisible}
-                    onClose={() => setGrimoireVisible(false)}
-                />
-
-                {/* BOTTOM TAB BAR */}
-                <BlurView intensity={100} tint="light" style={styles.bottomTabBar}>
-                    <TouchableOpacity onPress={() => { setGrimoireVisible(true); setProfileVisible(false); }} style={styles.tabButton}>
-                        <MaterialCommunityIcons
-                            name="book-variant"
-                            size={28}
-                            color={grimoireVisible ? "#10B981" : "#D1D5DB"} // Green if active, Light Grey if inactive
-                        />
-                        <Text style={[styles.tabLabel, { color: grimoireVisible ? "#10B981" : "#D1D5DB" }]}>Grimoire</Text>
-                    </TouchableOpacity>
-
-                    <TouchableOpacity onPress={() => { setGrimoireVisible(false); setProfileVisible(false); }} style={styles.tabButton}>
-                        <MaterialCommunityIcons
-                            name="home"
-                            size={32}
-                            color={(!grimoireVisible && !profileVisible) ? "#10B981" : "#D1D5DB"}
-                        />
-                        {/* Optional Label */}
-                        {/* <Text style={[styles.tabLabel, { color: (!grimoireVisible && !profileVisible) ? "#10B981" : "#D1D5DB" }]}>Home</Text> */}
-                    </TouchableOpacity>
-
-                    <TouchableOpacity onPress={() => { setProfileVisible(true); setGrimoireVisible(false); }} style={styles.tabButton}>
-                        <MaterialCommunityIcons
-                            name="cog"
-                            size={28}
-                            color={profileVisible ? "#10B981" : "#D1D5DB"}
-                        />
-                        <Text style={[styles.tabLabel, { color: profileVisible ? "#10B981" : "#D1D5DB" }]}>Profile</Text>
-                    </TouchableOpacity>
-                </BlurView>
-
+                </View>
             </View>
-        </ImageBackground>
+
+            <ScrollView
+                contentContainerStyle={[styles.scrollContent, { paddingTop: insets.top + 60 }]}
+                refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />}
+            >
+                {/* 1. TEAM STATUS WIDGET (Moved from Header) */}
+                <View style={styles.teamStatusCard}>
+                    <View style={styles.avatarRow}>
+                        {/* 1. YOU */}
+                        <View style={[styles.avatarCircle, userDone ? styles.avatarDone : styles.avatarNotReady]}>
+                            <Text style={styles.avatarLabel}>YOU</Text>
+                            {userDone && (
+                                <View style={styles.checkBadge}>
+                                    <MaterialCommunityIcons name="check" size={12} color="white" />
+                                </View>
+                            )}
+                        </View>
+
+                        {/* CONNECTOR LINE */}
+                        <View style={[styles.connectorLine, (status === 'SAFE') ? { backgroundColor: '#10B981' } : { backgroundColor: '#E5E7EB' }]} />
+
+                        {/* 2. PARTNER(S) */}
+                        <View style={[styles.avatarCircle, partnerDone ? styles.avatarDone : styles.avatarNotReady]}>
+                            <Text style={styles.avatarLabel}>TEAM</Text>
+                            {partnerDone && (
+                                <View style={styles.checkBadge}>
+                                    <MaterialCommunityIcons name="check" size={12} color="white" />
+                                </View>
+                            )}
+                        </View>
+                    </View>
+                    <Text style={styles.teamStatusText}>{status === 'SAFE' ? "Streak Safe!" : "Workout Needed!"}</Text>
+                </View>
+
+                {/* 2. BOSS BATTLE */}
+                <BossWidget
+                    hp={bossData.hp}
+                    maxHp={bossData.maxHp}
+                    name={bossData.name}
+                />
+
+                {/* 2. CHALLENGE CARD - QUEST GIVER */}
+                <ChallengeOfTheDay
+                    challengeText={challengeData.text}
+                    onComplete={handleComplete}
+                    isCompleted={userDone}
+                    mascotStatus={getMascotStatus()}
+                />
+
+                {/* 3. JOURNEY MAP */}
+                <View style={styles.mapContainer}>
+                    <JourneyMap history={history} />
+                </View>
+
+            </ScrollView>
+
+            <ProfileModal
+                visible={profileVisible}
+                onClose={() => setProfileVisible(false)}
+                code={teamCode}
+                onDebug={() => setDebugVisible(true)}
+                onReplayTutorial={() => setTutorialVisible(true)}
+                session={session}
+            />
+
+            <DebugMenu
+                visible={debugVisible}
+                onClose={() => setDebugVisible(false)}
+                onReset={async () => {
+                    await AsyncStorage.clear();
+                    await supabase.auth.signOut();
+                    router.replace('/');
+                }}
+                token=""
+            />
+
+            {/* TUTORIAL MODAL */}
+            <Modal visible={tutorialVisible} animationType="slide">
+                <TutorialScreen onComplete={async () => {
+                    await AsyncStorage.setItem('tutorial_completed', 'true');
+                    setTutorialVisible(false);
+                }} />
+            </Modal>
+
+            {/* GRIMOIRE MODAL */}
+            <GrimoireModal
+                visible={grimoireVisible}
+                onClose={() => setGrimoireVisible(false)}
+            />
+
+            {/* BOTTOM TAB BAR */}
+            <BlurView intensity={100} tint="light" style={styles.bottomTabBar}>
+                <TouchableOpacity onPress={() => { setGrimoireVisible(true); setProfileVisible(false); }} style={styles.tabButton}>
+                    <MaterialCommunityIcons
+                        name="book-variant"
+                        size={28}
+                        color={grimoireVisible ? "#10B981" : "#D1D5DB"} // Green if active, Light Grey if inactive
+                    />
+                    <Text style={[styles.tabLabel, { color: grimoireVisible ? "#10B981" : "#D1D5DB" }]}>Grimoire</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity onPress={() => { setGrimoireVisible(false); setProfileVisible(false); }} style={styles.tabButton}>
+                    <MaterialCommunityIcons
+                        name="home"
+                        size={32}
+                        color={(!grimoireVisible && !profileVisible) ? "#10B981" : "#D1D5DB"}
+                    />
+                    {/* Optional Label */}
+                    {/* <Text style={[styles.tabLabel, { color: (!grimoireVisible && !profileVisible) ? "#10B981" : "#D1D5DB" }]}>Home</Text> */}
+                </TouchableOpacity>
+
+                <TouchableOpacity onPress={() => { setProfileVisible(true); setGrimoireVisible(false); }} style={styles.tabButton}>
+                    <MaterialCommunityIcons
+                        name="cog"
+                        size={28}
+                        color={profileVisible ? "#10B981" : "#D1D5DB"}
+                    />
+                    <Text style={[styles.tabLabel, { color: profileVisible ? "#10B981" : "#D1D5DB" }]}>Profile</Text>
+                </TouchableOpacity>
+            </BlurView>
+        </ImageBackground >
     );
 }
 
@@ -369,12 +373,9 @@ const styles = StyleSheet.create({
     },
     headerGlass: {
         width: '100%',
-        // paddingTop: 0, // Handled dynamically
-        // height: 50,    // Handled dynamically
-        borderBottomWidth: 1,
-        borderBottomColor: '#E5E7EB',
         zIndex: 50,
-        backgroundColor: '#FFFFFF', // Solid white
+        // backgroundColor: '#FFFFFF', // REMOVED: Too much white space
+        // let BlurView handle the look
     },
     headerContent: {
         flexDirection: 'row',
@@ -386,18 +387,19 @@ const styles = StyleSheet.create({
     },
     statsRow: {
         flexDirection: 'row',
-        gap: 15,
+        gap: 24, // Consistent spacing between items
         width: '100%',
-        justifyContent: 'space-around'
+        justifyContent: 'center', // Center the cluster instead of spreading
+        alignItems: 'center'
     },
     statPill: {
         flexDirection: 'row',
         alignItems: 'center',
         backgroundColor: 'rgba(255,255,255,0.8)',
-        paddingHorizontal: 8,
-        paddingVertical: 2, // Ultra slim
-        borderRadius: 16,
-        gap: 4,
+        paddingHorizontal: 12,
+        paddingVertical: 4, // Reduced from 6 to 4 to shave pixels
+        borderRadius: 20,
+        gap: 6,
         shadowColor: "#000",
         shadowOffset: { width: 0, height: 2 },
         shadowOpacity: 0.05,
@@ -405,7 +407,7 @@ const styles = StyleSheet.create({
         elevation: 2
     },
     statText: {
-        fontSize: 14,
+        fontSize: 16, // Larger text
         fontWeight: 'bold',
         color: '#1F2937'
     },
@@ -469,7 +471,13 @@ const styles = StyleSheet.create({
         borderColor: 'white'
     },
     scrollContent: {
-        paddingTop: 20,
+        paddingTop: 60, // Keep some top spacing for Safe Area visual (since we act Translucent) 
+        // actually accessing `insets` here in styles is not possible directly unless dynamic style.
+        // The View is contentContainerStyle. 
+        // Let's assume standard safe area needed. 60 is fine, or maybe 40.
+        // Previous value was 60 to clear header. Now we have NO header. 
+        // But we have StatusBar translucent. 
+        // We should just use a reasonable padding.
         paddingBottom: 100,
         paddingHorizontal: 20,
         alignItems: 'center'
@@ -477,15 +485,9 @@ const styles = StyleSheet.create({
     mapContainer: {
         width: '100%',
         marginTop: 20,
-        backgroundColor: 'rgba(255,255,255,0.9)', // Slight opacity for map bg
-        borderRadius: 24,
-        padding: 20,
         marginBottom: 40,
-        shadowColor: "#000",
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.05,
-        shadowRadius: 10,
-        elevation: 2
+        paddingHorizontal: 20
+        // Transparent container for floating path
     },
     sectionTitle: {
         fontSize: 14,

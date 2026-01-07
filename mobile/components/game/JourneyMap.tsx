@@ -106,7 +106,9 @@ export default function JourneyMap({ history, onSpotRequest, canRequestSpot, spo
                                     <View style={{
                                         width: 4,
                                         height: Math.sqrt(VERTICAL_SPACING ** 2 + (offsets[index + 1] - nodeXOffset) ** 2),
-                                        backgroundColor: (isCompleted || (isToday && isCompleted)) ? '#4ADE80' : '#E5E7EB', // Green if path traveled
+                                        backgroundColor: (isCompleted || (isToday && isCompleted))
+                                            ? '#4ADE80' // Green if path traveled
+                                            : 'rgba(255,255,255,0.3)', // Semi-transparent white "drawn" effect
                                         transformOrigin: 'top center',
                                         transform: [
                                             { rotate: `${-Math.atan2(offsets[index + 1] - nodeXOffset, VERTICAL_SPACING)}rad` }
