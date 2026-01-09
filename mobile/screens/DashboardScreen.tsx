@@ -8,19 +8,25 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { StatusBar } from 'expo-status-bar';
 import { BlurView } from 'expo-blur';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import BossWidget from '../components/game/BossWidget';
+import { LinearGradient } from 'expo-linear-gradient';
+import { GestureDetector, Gesture, GestureHandlerRootView } from 'react-native-gesture-handler';
+import Animated, { useSharedValue, useAnimatedStyle, withSpring, interpolate, Extrapolate, runOnJS, withTiming } from 'react-native-reanimated';
 import ChallengeOfTheDay from '../components/game/ChallengeOfTheDay';
 import JourneyMap from '../components/game/JourneyMap';
+import BossWidget from '../components/game/BossWidget';
 import ProfileModal from '../components/ui/ProfileModal';
 import DebugMenu from '../components/game/DebugMenu';
 import TutorialScreen from '../screens/TutorialScreen';
 import GrimoireModal from '../components/game/GrimoireModal';
+import ChallengeDrawer from '../components/game/ChallengeDrawer';
 
 const { width } = Dimensions.get('window');
 
 export default function DashboardScreen() {
+    const insets = useSafeAreaInsets(); // Moved up: Must be before conditional returns
     const router = useRouter();
     const [refreshing, setRefreshing] = useState(false);
+    const [isLoading, setIsLoading] = useState(true);
 
     // DASHBOARD STATE
     const [teamId, setTeamId] = useState<string | null>(null);
@@ -86,6 +92,13 @@ export default function DashboardScreen() {
         }
     };
 
+    const handleAuthError = async () => {
+        console.log("🚨 Auth Error detected! Logging out...");
+        await AsyncStorage.removeItem('userToken');
+        await supabase.auth.signOut();
+        router.replace('/');
+    };
+
     const fetchData = async () => {
         try {
             let token = await AsyncStorage.getItem('userToken');
@@ -99,6 +112,10 @@ export default function DashboardScreen() {
                     await AsyncStorage.setItem('userToken', token);
                 } else {
                     console.log("DEBUG: No token. Stopping fetch.");
+                    // Force logout if no token available at all on dashboard load?
+                    // Maybe, or just stay here. Logic above implies silent fail.
+                    // Let's rely on api call failing.
+                    router.replace('/'); // Redirect if absolutely no token
                     return;
                 }
             }
@@ -106,7 +123,7 @@ export default function DashboardScreen() {
             const data = await api.getDashboard(token);
 
             if (data?.error === 'AUTH_ERROR') {
-                // Handle auth error (logout?)
+                await handleAuthError();
                 return;
             }
 
@@ -147,6 +164,7 @@ export default function DashboardScreen() {
             console.log("Error fetching data:", error);
         } finally {
             setRefreshing(false);
+            setIsLoading(false);
         }
     };
 
@@ -195,168 +213,209 @@ export default function DashboardScreen() {
         return status as 'SAFE' | 'AT_RISK' | 'SLEEPING';
     };
 
-    if (hasTeam === false) {
-        return <View style={styles.container} />;
+    // --- ANIMATIONS & GESTURES ---
+    const { height: SCREEN_HEIGHT } = Dimensions.get('window');
+    const SHEET_HEIGHT = SCREEN_HEIGHT * 0.9; // 90% of screen to match style
+    const PEEK_HEIGHT = 280; // Height visible when collapsed (approx 250px content + padding)
+    const MAX_TRANSLATE_Y = SHEET_HEIGHT - PEEK_HEIGHT;
+
+    // 0 = Expanded (Top), 1 = Collapsed (Bottom)
+    // Actually let's do: 0 = Expanded, MAX = Collapsed.
+    // context: translateY
+    const translateY = useSharedValue(MAX_TRANSLATE_Y); // Default to Collapsed (Peek)
+    const context = useSharedValue({ y: 0 });
+
+    const gesture = Gesture.Pan()
+        .onStart(() => {
+            context.value = { y: translateY.value };
+        })
+        .onUpdate((event) => {
+            translateY.value = Math.max(0, Math.min(MAX_TRANSLATE_Y, context.value.y + event.translationY));
+        })
+        .onEnd((event) => {
+            // Snap Logic
+            if (event.velocityY > 500 || translateY.value > MAX_TRANSLATE_Y / 2) {
+                // Snap to Bottom (Collapsed)
+                translateY.value = withSpring(MAX_TRANSLATE_Y, { damping: 25, stiffness: 120 });
+            } else {
+                // Snap to Top (Expanded)
+                translateY.value = withSpring(0, { damping: 25, stiffness: 120 });
+            }
+        });
+
+    // Reactive Map Styles
+    // When translateY is 0 (Expanded) -> Scale is 0.85
+    // When translateY is MAX (Collapsed) -> Scale is 1.0
+    const rMapStyle = useAnimatedStyle(() => {
+        const scale = interpolate(translateY.value, [0, MAX_TRANSLATE_Y], [0.85, 1.0], Extrapolate.CLAMP);
+        const mapTranslateY = interpolate(translateY.value, [0, MAX_TRANSLATE_Y], [-50, 0], Extrapolate.CLAMP);
+        return {
+            transform: [{ scale }, { translateY: mapTranslateY }]
+        };
+    });
+
+    const rSheetStyle = useAnimatedStyle(() => {
+        return {
+            transform: [{ translateY: translateY.value }]
+        };
+    });
+
+    if (isLoading) {
+        return (
+            <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+                <Text>Loading...</Text>
+            </View>
+        );
     }
 
-    const insets = useSafeAreaInsets(); // Need to add import!
+    // const insets = useSafeAreaInsets(); // Removed (moved to top)
 
     return (
-        <ImageBackground
-            source={require('../assets/images/fitness_bg.png')}
-            style={styles.backgroundImage}
-            resizeMode="cover"
-        >
-            <View style={styles.container}>
+        <GestureHandlerRootView style={{ flex: 1 }}>
+            <ImageBackground
+                source={require('../assets/images/fitness_bg.png')}
+                style={styles.backgroundImage}
+                resizeMode="cover"
+            >
                 <StatusBar style="dark" translucent={true} backgroundColor="transparent" />
 
-                {/* HEADER - Floating Stats (No Bar Background) */}
-                <View style={{
-                    position: 'absolute',
-                    top: 0,
-                    width: '100%',
-                    zIndex: 50,
-                    // PRO MOVE: Push it up into the status bar slightly for that flush magazine look
-                    paddingTop: Math.max(15, insets.top - 10),
-                    alignItems: 'center',
-                }}>
-                    <View style={styles.statsRow}>
-                        <View style={styles.statPill}>
-                            <MaterialCommunityIcons name="heart" size={20} color="#EF4444" />
-                            <Text style={styles.statText}>{hearts}</Text>
-                        </View>
-                        <View style={styles.statPill}>
-                            <MaterialCommunityIcons name="fire" size={20} color="#F97316" />
-                            <Text style={styles.statText}>{streak}</Text>
-                        </View>
-                        <View style={styles.statPill}>
-                            <MaterialCommunityIcons name="snowflake" size={20} color="#3B82F6" />
-                            <Text style={styles.statText}>{freezes}</Text>
+                {/* LAYER 0: GAME WORLD (Background - Fullscreen) */}
+                <Animated.View style={[styles.mapContainer, rMapStyle]}>
+                    <JourneyMap
+                        history={history}
+                        canRequestSpot={false}
+                    />
+                </Animated.View>
+
+                {/* LAYER 1: HEADER (Overlay) */}
+                <View style={{ flex: 1, position: 'relative', pointerEvents: 'box-none' }}>
+
+                    {/* TOP LABELS (Above Icons) */}
+                    <View style={{
+                        position: 'absolute',
+                        top: insets.top, // Start right at inset
+                        width: '100%',
+                        zIndex: 60,
+                        flexDirection: 'row',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        paddingHorizontal: 20,
+                        paddingBottom: 5, // Only padding bottom, no top padding
+                        marginTop: 0 // Ensure no margin
+                    }}>
+                        <Text style={styles.topLabelLeft}>YOUR PATH</Text>
+                        <View style={styles.topLabelRightContainer}>
+                            <Text style={styles.topLabelRight}>7 DAY VIEW</Text>
                         </View>
                     </View>
-                </View>
-            </View>
 
-            <ScrollView
-                contentContainerStyle={[styles.scrollContent, { paddingTop: insets.top + 60 }]}
-                refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />}
-            >
-                {/* 1. TEAM STATUS WIDGET (Moved from Header) */}
-                <View style={styles.teamStatusCard}>
-                    <View style={styles.avatarRow}>
-                        {/* 1. YOU */}
-                        <View style={[styles.avatarCircle, userDone ? styles.avatarDone : styles.avatarNotReady]}>
-                            <Text style={styles.avatarLabel}>YOU</Text>
-                            {userDone && (
-                                <View style={styles.checkBadge}>
-                                    <MaterialCommunityIcons name="check" size={12} color="white" />
+                    {/* HEADER - HUB & SPOKE LAYOUT (Moved Down) */}
+                    <View style={{
+                        position: 'absolute',
+                        top: 0,
+                        width: '100%',
+                        zIndex: 50,
+                        paddingTop: Math.max(15, insets.top + 50), // 50px offset for top labels
+                        paddingHorizontal: 20,
+                        flexDirection: 'row',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                    }}>
+                        {/* LEFT: Grimoire (Scroll) Icon */}
+                        <TouchableOpacity
+                            onPress={() => { setGrimoireVisible(true); setProfileVisible(false); }}
+                            style={styles.iconButton}
+                        >
+                            <MaterialCommunityIcons name="script-text-outline" size={26} color="#1F2937" />
+                        </TouchableOpacity>
+
+                        {/* CENTER: Stats Pill */}
+                        <View style={{
+                            position: 'absolute',
+                            left: 0,
+                            right: 0,
+                            top: Math.max(15, insets.top + 50), // Match padding top offset
+                            alignItems: 'center',
+                            zIndex: 0
+                        }} pointerEvents="box-none">
+                            <View style={styles.statsPillContainer}>
+                                <View style={styles.statItem}>
+                                    <MaterialCommunityIcons name="heart" size={20} color="#EF4444" />
+                                    <Text style={styles.statTextPill}>{hearts}</Text>
                                 </View>
-                            )}
+                                <View style={styles.statItem}>
+                                    <MaterialCommunityIcons name="fire" size={20} color="#F97316" />
+                                    <Text style={styles.statTextPill}>{streak}</Text>
+                                </View>
+                                <View style={styles.statItem}>
+                                    <MaterialCommunityIcons name="snowflake" size={20} color="#3B82F6" />
+                                    <Text style={styles.statTextPill}>{freezes}</Text>
+                                </View>
+                            </View>
                         </View>
 
-                        {/* CONNECTOR LINE */}
-                        <View style={[styles.connectorLine, (status === 'SAFE') ? { backgroundColor: '#10B981' } : { backgroundColor: '#E5E7EB' }]} />
-
-                        {/* 2. PARTNER(S) */}
-                        <View style={[styles.avatarCircle, partnerDone ? styles.avatarDone : styles.avatarNotReady]}>
-                            <Text style={styles.avatarLabel}>TEAM</Text>
-                            {partnerDone && (
-                                <View style={styles.checkBadge}>
-                                    <MaterialCommunityIcons name="check" size={12} color="white" />
-                                </View>
-                            )}
-                        </View>
+                        {/* RIGHT: Profile Avatar */}
+                        <TouchableOpacity
+                            onPress={() => { setProfileVisible(true); setGrimoireVisible(false); }}
+                            style={[styles.iconButton, { padding: 2 }]} // Extra padding for border internal
+                        >
+                            <Image
+                                source={require('../assets/animations/happy_zippy_animated.gif')}
+                                style={{ width: '100%', height: '100%', borderRadius: 999 }}
+                                resizeMode="cover"
+                            />
+                        </TouchableOpacity>
                     </View>
-                    <Text style={styles.teamStatusText}>{status === 'SAFE' ? "Streak Safe!" : "Workout Needed!"}</Text>
                 </View>
 
-                {/* 2. BOSS BATTLE */}
-                <BossWidget
-                    hp={bossData.hp}
-                    maxHp={bossData.maxHp}
-                    name={bossData.name}
+                {/* LAYER 2: DRAWER (Foreground) */}
+                <GestureDetector gesture={gesture}>
+                    <Animated.View style={[styles.drawerSheet, rSheetStyle]}>
+                        <ChallengeDrawer
+                            challengeData={challengeData}
+                            onComplete={handleComplete}
+                            isCompleted={userDone}
+                            mascotStatus={getMascotStatus()}
+                        />
+                    </Animated.View>
+                </GestureDetector>
+
+                <ProfileModal
+                    visible={profileVisible}
+                    onClose={() => setProfileVisible(false)}
+                    code={teamCode}
+                    onDebug={() => setDebugVisible(true)}
+                    onReplayTutorial={() => setTutorialVisible(true)}
+                    session={session}
                 />
 
-                {/* 2. CHALLENGE CARD - QUEST GIVER */}
-                <ChallengeOfTheDay
-                    challengeText={challengeData.text}
-                    onComplete={handleComplete}
-                    isCompleted={userDone}
-                    mascotStatus={getMascotStatus()}
+                <DebugMenu
+                    visible={debugVisible}
+                    onClose={() => setDebugVisible(false)}
+                    onReset={async () => {
+                        await AsyncStorage.clear();
+                        await supabase.auth.signOut();
+                        router.replace('/');
+                    }}
+                    token=""
                 />
 
-                {/* 3. JOURNEY MAP */}
-                <View style={styles.mapContainer}>
-                    <JourneyMap history={history} />
-                </View>
+                {/* TUTORIAL MODAL */}
+                <Modal visible={tutorialVisible} animationType="slide">
+                    <TutorialScreen onComplete={async () => {
+                        await AsyncStorage.setItem('tutorial_completed', 'true');
+                        setTutorialVisible(false);
+                    }} />
+                </Modal>
 
-            </ScrollView>
+                {/* GRIMOIRE MODAL */}
+                <GrimoireModal
+                    visible={grimoireVisible}
+                    onClose={() => setGrimoireVisible(false)}
+                />
 
-            <ProfileModal
-                visible={profileVisible}
-                onClose={() => setProfileVisible(false)}
-                code={teamCode}
-                onDebug={() => setDebugVisible(true)}
-                onReplayTutorial={() => setTutorialVisible(true)}
-                session={session}
-            />
-
-            <DebugMenu
-                visible={debugVisible}
-                onClose={() => setDebugVisible(false)}
-                onReset={async () => {
-                    await AsyncStorage.clear();
-                    await supabase.auth.signOut();
-                    router.replace('/');
-                }}
-                token=""
-            />
-
-            {/* TUTORIAL MODAL */}
-            <Modal visible={tutorialVisible} animationType="slide">
-                <TutorialScreen onComplete={async () => {
-                    await AsyncStorage.setItem('tutorial_completed', 'true');
-                    setTutorialVisible(false);
-                }} />
-            </Modal>
-
-            {/* GRIMOIRE MODAL */}
-            <GrimoireModal
-                visible={grimoireVisible}
-                onClose={() => setGrimoireVisible(false)}
-            />
-
-            {/* BOTTOM TAB BAR */}
-            <BlurView intensity={100} tint="light" style={styles.bottomTabBar}>
-                <TouchableOpacity onPress={() => { setGrimoireVisible(true); setProfileVisible(false); }} style={styles.tabButton}>
-                    <MaterialCommunityIcons
-                        name="book-variant"
-                        size={28}
-                        color={grimoireVisible ? "#10B981" : "#D1D5DB"} // Green if active, Light Grey if inactive
-                    />
-                    <Text style={[styles.tabLabel, { color: grimoireVisible ? "#10B981" : "#D1D5DB" }]}>Grimoire</Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity onPress={() => { setGrimoireVisible(false); setProfileVisible(false); }} style={styles.tabButton}>
-                    <MaterialCommunityIcons
-                        name="home"
-                        size={32}
-                        color={(!grimoireVisible && !profileVisible) ? "#10B981" : "#D1D5DB"}
-                    />
-                    {/* Optional Label */}
-                    {/* <Text style={[styles.tabLabel, { color: (!grimoireVisible && !profileVisible) ? "#10B981" : "#D1D5DB" }]}>Home</Text> */}
-                </TouchableOpacity>
-
-                <TouchableOpacity onPress={() => { setProfileVisible(true); setGrimoireVisible(false); }} style={styles.tabButton}>
-                    <MaterialCommunityIcons
-                        name="cog"
-                        size={28}
-                        color={profileVisible ? "#10B981" : "#D1D5DB"}
-                    />
-                    <Text style={[styles.tabLabel, { color: profileVisible ? "#10B981" : "#D1D5DB" }]}>Profile</Text>
-                </TouchableOpacity>
-            </BlurView>
-        </ImageBackground >
+            </ImageBackground >
+        </GestureHandlerRootView>
     );
 }
 
@@ -368,46 +427,80 @@ const styles = StyleSheet.create({
     },
     container: {
         flex: 1,
-        backgroundColor: 'transparent', // Ensure no white bg
-        // paddingTop: 0, // Explicitly 0
+        backgroundColor: 'transparent',
     },
+    mapContainer: {
+        ...StyleSheet.absoluteFillObject,
+        zIndex: 0,
+        // justifyContent: 'center' // Removed to allow full scroll
+    },
+    drawerSheet: {
+        position: 'absolute',
+        left: 0,
+        right: 0,
+        bottom: 0,
+        // Height handled by content or minHeight
+        // But we need to translate it.
+        // Actually, for a bottom sheet, we usually set a high height and translate it down.
+        height: Dimensions.get('window').height * 0.9, // 90% screen height
+        justifyContent: 'flex-start',
+        zIndex: 100,
+    },
+    // ... kept old styles for modal/header ...
     headerGlass: {
         width: '100%',
         zIndex: 50,
-        // backgroundColor: '#FFFFFF', // REMOVED: Too much white space
-        // let BlurView handle the look
     },
     headerContent: {
         flexDirection: 'row',
         justifyContent: 'center',
         alignItems: 'center',
         paddingHorizontal: 20,
-        paddingBottom: 2, // Minimal bottom padding
+        paddingBottom: 2,
         width: '100%',
     },
     statsRow: {
         flexDirection: 'row',
-        gap: 24, // Consistent spacing between items
+        gap: 24,
         width: '100%',
-        justifyContent: 'center', // Center the cluster instead of spreading
+        justifyContent: 'center',
         alignItems: 'center'
     },
     statPill: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: 'rgba(255,255,255,0.8)',
-        paddingHorizontal: 12,
-        paddingVertical: 4, // Reduced from 6 to 4 to shave pixels
-        borderRadius: 20,
-        gap: 6,
-        shadowColor: "#000",
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.05,
-        shadowRadius: 4,
-        elevation: 2
+        marginHorizontal: 15,
     },
     statText: {
-        fontSize: 16, // Larger text
+        fontSize: 16,
+        fontWeight: 'bold',
+        color: '#FFFFFF',
+        textShadowColor: 'rgba(0, 0, 0, 0.3)',
+        textShadowOffset: { width: 0, height: 1 },
+        textShadowRadius: 3,
+        marginLeft: 4
+    },
+    statsPillContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: 'rgba(255,255,255,0.95)', // Solid/High Opacity White
+        borderRadius: 50,
+        paddingHorizontal: 20,
+        paddingVertical: 10,
+        gap: 15,
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 4,
+        elevation: 3
+    },
+    statItem: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4
+    },
+    statTextPill: {
+        fontSize: 14,
         fontWeight: 'bold',
         color: '#1F2937'
     },
@@ -416,9 +509,39 @@ const styles = StyleSheet.create({
         gap: 12
     },
     iconButton: {
-        padding: 8,
-        backgroundColor: 'rgba(255,255,255,0.5)',
-        borderRadius: 12
+        width: 52,
+        height: 52,
+        justifyContent: 'center',
+        alignItems: 'center',
+        borderRadius: 26,
+        overflow: 'hidden',
+        borderWidth: 2,
+        borderColor: '#FFFFFF',
+        backgroundColor: 'rgba(255,255,255,0.95)', // Solid/High Opacity White (Unified)
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 4,
+        elevation: 3
+    },
+    topLabelLeft: {
+        fontSize: 12,
+        fontWeight: '900',
+        color: 'rgba(255,255,255,0.7)',
+        letterSpacing: 1,
+        textTransform: 'uppercase'
+    },
+    topLabelRightContainer: {
+        backgroundColor: 'rgba(255,255,255,0.8)',
+        borderRadius: 12,
+        paddingHorizontal: 10,
+        paddingVertical: 4
+    },
+    topLabelRight: {
+        fontSize: 10,
+        fontWeight: '800',
+        color: '#4B5563',
+        textTransform: 'uppercase'
     },
     teamStatusContainer: {
         width: '100%',
@@ -455,39 +578,35 @@ const styles = StyleSheet.create({
     avatarLabel: {
         fontSize: 8,
         fontWeight: '900',
-        color: '#6B7280'
+        color: '#FFFFFF',
+        textShadowColor: 'rgba(0, 0, 0, 0.3)',
+        textShadowOffset: { width: 0, height: 1 },
+        textShadowRadius: 3
     },
-    checkBadge: {
+    // REMOVED old actionSheet and dragHandle styles, replaced by drawerSheet
+    actionSheet: {
         position: 'absolute',
-        bottom: -2,
-        right: -2,
-        backgroundColor: '#10B981',
-        borderRadius: 10,
-        width: 16,
-        height: 16,
-        justifyContent: 'center',
-        alignItems: 'center',
-        borderWidth: 1,
-        borderColor: 'white'
-    },
-    scrollContent: {
-        paddingTop: 60, // Keep some top spacing for Safe Area visual (since we act Translucent) 
-        // actually accessing `insets` here in styles is not possible directly unless dynamic style.
-        // The View is contentContainerStyle. 
-        // Let's assume standard safe area needed. 60 is fine, or maybe 40.
-        // Previous value was 60 to clear header. Now we have NO header. 
-        // But we have StatusBar translucent. 
-        // We should just use a reasonable padding.
-        paddingBottom: 100,
-        paddingHorizontal: 20,
+        bottom: 0,
+        width: '100%',
+        height: '45%',
+        backgroundColor: '#FFFFFF',
+        borderTopLeftRadius: 40,
+        borderTopRightRadius: 40,
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: -5 },
+        shadowOpacity: 0.2,
+        shadowRadius: 10,
+        elevation: 20,
+        paddingTop: 10,
         alignItems: 'center'
     },
-    mapContainer: {
-        width: '100%',
-        marginTop: 20,
-        marginBottom: 40,
-        paddingHorizontal: 20
-        // Transparent container for floating path
+    dragHandle: {
+        width: 60,
+        height: 6,
+        backgroundColor: '#E5E7EB',
+        borderRadius: 3,
+        marginBottom: 10,
+        marginTop: 5
     },
     sectionTitle: {
         fontSize: 14,
@@ -496,52 +615,50 @@ const styles = StyleSheet.create({
         marginBottom: 20,
         letterSpacing: 1
     },
-    // New Team Status Card Styles
     teamStatusCard: {
-        backgroundColor: 'rgba(255,255,255,0.9)',
-        borderRadius: 24,
-        paddingVertical: 15,
+        paddingVertical: 10,
         paddingHorizontal: 30,
-        marginBottom: 24,
+        marginBottom: 20,
         alignItems: 'center',
-        shadowColor: "#000",
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 8,
-        elevation: 4,
-        width: '100%', // full width of container padding
+        width: '100%',
         maxWidth: 350
     },
     teamStatusText: {
         marginTop: 10,
         fontSize: 12,
         fontWeight: '700',
-        color: '#6B7280',
+        color: '#FFFFFF',
         textTransform: 'uppercase',
-        letterSpacing: 1
+        letterSpacing: 1,
+        textShadowColor: 'rgba(0, 0, 0, 0.3)',
+        textShadowOffset: { width: 0, height: 1 },
+        textShadowRadius: 3
     },
     bottomTabBar: {
         position: 'absolute',
-        bottom: 0,
-        width: '100%',
+        bottom: 30,
+        width: '80%',
+        alignSelf: 'center',
         flexDirection: 'row',
-        backgroundColor: '#FFFFFF', // Solid white for clean look, or keep blur if preferred. Duolingo is solid/translucent. Let's keep BlurView but style it solid-ish. 
-        // Actually Dashboard uses BlurView component, so this bg color acts as tint if intensity is low. 
-        // But for Duolingo style, usually it is solid border top.
-        borderTopWidth: 1,
-        borderTopColor: '#E5E7EB',
+        borderRadius: 40,
+        overflow: 'hidden',
+        borderTopWidth: 0,
         paddingHorizontal: 20,
-        paddingTop: 12,
-        paddingBottom: 30, // Extra padding for Home Indicator
-        justifyContent: 'space-around', // Key for even spacing
+        paddingTop: 15,
+        paddingBottom: 15,
+        justifyContent: 'space-around',
         alignItems: 'center',
-        elevation: 0, // Flat look usually
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 10 },
+        shadowOpacity: 0.25,
+        shadowRadius: 10,
+        elevation: 10,
     },
     tabButton: {
         alignItems: 'center',
         justifyContent: 'center',
         gap: 4,
-        flex: 1, // Hit target optimization
+        flex: 1,
     },
     tabLabel: {
         fontSize: 10,

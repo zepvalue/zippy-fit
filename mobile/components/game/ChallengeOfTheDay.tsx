@@ -2,13 +2,16 @@ import React, { useRef, useState, useEffect } from 'react';
 import { View, Text, StyleSheet, Image, PanResponder, Animated as RNAnimated, Dimensions } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
+import { BlurView } from 'expo-blur';
+import { LinearGradient } from 'expo-linear-gradient';
 
 interface ChallengeOfTheDayProps {
     challengeText: string;
     onComplete: () => void;
     isCompleted: boolean;
-    type?: 'normal' | 'spot_cover' | 'critical';
+    type?: 'normal' | 'boss';
     mascotStatus?: 'SAFE' | 'AT_RISK' | 'SLEEPING';
+    variant?: 'card' | 'sheet' | 'drawer'; // NEW: Determine layout style
 }
 
 const SLIDER_WIDTH = 250;
@@ -18,13 +21,12 @@ const THUMB_SIZE = 50;
 
 const MESSAGES = {
     SAFE: ["See you tomorrow! ⚡", "We crushed it! 🎉", "Wohooo 🎉 ", "High five! ✋"],
-    AT_RISK: ["Don't break the streak! 🔥", "Zippy needs you! 🥺", "Let's go! 🏃", "Almost lost it! 😰"],
-    SLEEPING: ["Zzz... waiting... 😴", "Wake up partner! 📢", "I'm nappin' here...", "Did they forget? 🤔"]
+    AT_RISK: ["Workout Needed! 😤", "Don't break the streak! 🔥", "Zippy needs you! 🥺", "Let's go! 🏃"],
+    SLEEPING: ["Workout Needed! ", "Wake up partner! 📢", "I'm nappin' here...", "Did they forget? 🤔"]
 };
 
-export default function ChallengeOfTheDay({ challengeText, onComplete, isCompleted, type = 'normal', mascotStatus = 'AT_RISK' }: ChallengeOfTheDayProps) {
-    const isHero = type === 'spot_cover';
-    const isCritical = type === 'critical';
+export default function ChallengeOfTheDay({ challengeText, onComplete, isCompleted, type = 'normal', mascotStatus = 'AT_RISK', variant = 'card' }: ChallengeOfTheDayProps) {
+    // Legacy flags removed
 
     // Ref to track completion for PanResponder which is created once
     const isCompletedRef = useRef(isCompleted);
@@ -34,8 +36,7 @@ export default function ChallengeOfTheDay({ challengeText, onComplete, isComplet
 
     // COLORS
     let mainColor = '#58CC02'; // Green
-    if (isHero) mainColor = '#3B82F6'; // Blue
-    if (isCritical) mainColor = '#DC2626'; // Red
+    if (type === 'boss') mainColor = '#DC2626'; // Boss Red
 
     // MASCOT
     let mascotSource;
@@ -78,7 +79,6 @@ export default function ChallengeOfTheDay({ challengeText, onComplete, isComplet
             // Using a ref for isCompleted would be safer if we didn't re-create PanResponder.
             // But actually we are using useRef(PanResponder.create(...)).current.
             // This means 'isCompleted' inside here is STALE (always false from first render).
-
             // WE MUST create PanResponder inside useMemo dependent on [isCompleted], OR use a ref tracking it.
             // Let's use a ref to track completion status so the closure reads up-to-date value.
             onStartShouldSetPanResponder: () => !isCompletedRef.current,
@@ -89,11 +89,6 @@ export default function ChallengeOfTheDay({ challengeText, onComplete, isComplet
 
             onPanResponderGrant: () => {
                 setSliderActive(true);
-                // We keep the offset logic, but ensure we don't jump if re-grabbing? 
-                // Actually for a simple slider, usually we reset or continue.
-                // Current logic: pan.setOffset... this assumes we want to add to existing. 
-                // But if we reset on release (if failed), offset is cleared.
-                // If we succeeded, we are done.
                 pan.setOffset({
                     x: (pan.x as any)._value,
                     y: 0
@@ -141,63 +136,82 @@ export default function ChallengeOfTheDay({ challengeText, onComplete, isComplet
         }
     }, [isCompleted]);
 
-    const animatedWidth = RNAnimated.add(pan.x, THUMB_SIZE);
+    // COMPUTE STYLES BASED ON VARIANT
+    const isSheet = variant === 'sheet';
+    const isDrawer = variant === 'drawer';
+
+    // In drawer mode, we strip container styles
+    const containerStyle: any = isDrawer ? { width: '100%', alignItems: 'center' } : (isSheet ? styles.sheetContainer : styles.container);
+    // In drawer mode, content style is simple
+    const contentStyle: any = isDrawer ? { width: '100%', alignItems: 'center' } : (isSheet ? styles.sheetContent : styles.card);
+
+
+    // Helper to style numbers in orange
+    const renderStyledText = (text: string) => {
+        const parts = text.split(/(\d+)/);
+        return parts.map((part, index) => {
+            // Check if it is a number
+            if (/^\d+$/.test(part)) {
+                return <Text key={index} style={{ color: '#F97316' }}>{part}</Text>;
+            }
+            return <Text key={index}>{part}</Text>;
+        });
+    };
 
     return (
-        <View style={styles.container}>
-            {/* 1. FREE MASCOT (Overlapping) */}
-            <View style={styles.mascotContainer}>
-                {/* SPEECH BUBBLE OVERLAY */}
-                {message && (
-                    <Animated.View
-                        entering={FadeIn.delay(500).duration(500)}
-                        style={styles.speechBubble}
-                    >
-                        <Text style={styles.speechText}>{message}</Text>
+        <View style={containerStyle}>
+
+            {/* 1. MASCOT (Only show if NOT sheet AND NOT drawer - mascot is in World Layer) */}
+            {!isSheet && !isDrawer && (
+                <Animated.View style={styles.mascotContainer}>
+                    <Image source={mascotSource} style={styles.mascotImage} resizeMode="contain" />
+
+                    {/* Speech Bubble */}
+                    <Animated.View entering={FadeIn.delay(500)} style={styles.speechBubble}>
                         <View style={styles.speechArrow} />
+                        <Text style={styles.speechText}>
+                            {MESSAGES[mascotStatus][Math.floor(Math.random() * MESSAGES[mascotStatus].length)]}
+                        </Text>
                     </Animated.View>
+                </Animated.View>
+            )}
+
+            {/* 2. CARD / SHEET / DRAWER CONTENT */}
+            <View style={contentStyle}>
+
+                {/* WATERMARK ICON (Behind Text) */}
+                {(isDrawer || !isSheet) && (
+                    <View style={styles.watermarkIconContainer}>
+                        <MaterialCommunityIcons name="dumbbell" size={140} color="rgba(0,0,0,0.03)" />
+                    </View>
                 )}
 
-                <Image
-                    source={mascotSource}
-                    style={styles.mascotImage}
-                    resizeMode="contain"
-                />
-            </View>
+                <Text style={styles.headerLabel}>CHALLENGE OF THE DAY</Text>
 
-            {/* 2. MAIN CARD */}
-            <View style={styles.card}>
-
-                {/* HEADER LABEL */}
-                {/* WATERMARK */}
-                <View style={styles.watermarkContainer}>
-                    <MaterialCommunityIcons name="dumbbell" size={120} color="#000" />
-                </View>
-
-                <Text style={[styles.headerLabel, isCritical && { color: '#EF4444' }]}>
-                    {isCritical ? "⚠️ CRITICAL FAILURE" : "CHALLENGE OF THE DAY"}
-                </Text>
-
-                <Text style={styles.hugeText}>
-                    {isCompleted ? "DONE!" : (
-                        // Regex to find the number and style it
-                        // e.g. "Walk 10,000 steps" -> ["Walk ", "10,000", " steps"]
-                        challengeText.split(/(\d+(?:,\d+)*)/).map((part, index) => {
-                            if (/^\d+(?:,\d+)*$/.test(part)) {
-                                return <Text key={index} style={{ fontSize: 64, color: '#F97316' }}>{part}</Text>;
-                            }
-                            return <Text key={index} style={{ fontSize: 32, color: '#1F2937' }}>{part}</Text>;
-                        })
-                    )}
-                </Text>
+                <Animated.Text
+                    entering={FadeIn.delay(300)}
+                    style={styles.hugeText}
+                    adjustsFontSizeToFit={true} // Scale down if too long
+                    numberOfLines={2}
+                    minimumFontScale={0.5}
+                >
+                    {renderStyledText(challengeText)}
+                </Animated.Text>
 
                 {/* SLIDER BUTTON */}
-                <View style={styles.sliderContainer}>
-                    {/* Background Track */}
-                    <View style={styles.sliderTrack} />
+                <View style={[styles.sliderContainer, { overflow: 'hidden' }]}>
+                    {/* Background Track - GRADIENT */}
+                    <LinearGradient
+                        colors={['#4ade80', '#22c55e']} // Green Gradient
+                        start={{ x: 0, y: 0 }}
+                        end={{ x: 1, y: 0 }}
+                        style={StyleSheet.absoluteFill}
+                    />
 
-                    {/* Active Fill Track */}
-                    <RNAnimated.View style={[styles.sliderFill, { width: animatedWidth, backgroundColor: isCompleted ? '#E5E7EB' : mainColor }]} />
+                    {/* Active Fill Track (Grey when done, otherwise transparent over gradient) */}
+                    {isCompleted && (
+                        <View style={[styles.sliderFill, { width: '100%', backgroundColor: '#E5E7EB', zIndex: 11 }]} />
+                    )}
 
                     {/* Text Underneath Slider (Hint) */}
                     {!sliderActive && !isCompleted && (
@@ -207,7 +221,7 @@ export default function ChallengeOfTheDay({ challengeText, onComplete, isComplet
                         </View>
                     )}
 
-                    {/* Draggable Thumb */}
+                    {/* THUMB */}
                     <RNAnimated.View
                         style={[
                             styles.sliderThumb,
@@ -216,22 +230,22 @@ export default function ChallengeOfTheDay({ challengeText, onComplete, isComplet
                                 backgroundColor: isCompleted ? '#9CA3AF' : 'white'
                             }
                         ]}
-                        hitSlop={{ top: 30, bottom: 30, left: 30, right: 50 }} // KEY FIX: Easier to grab
+                        hitSlop={{ top: 30, bottom: 30, left: 30, right: 50 }}
                         {...panResponder.panHandlers}
                     >
                         <MaterialCommunityIcons
-                            name={isCompleted ? "check" : (isCritical ? "alert" : "trophy")}
+                            name={isCompleted ? "check" : "trophy"}
                             size={24}
                             color={isCompleted ? "white" : mainColor}
                         />
                     </RNAnimated.View>
                 </View>
-
-                {/* STATUS TEXT (Optional Footer) */}
-                {isCompleted && (
-                    <Text style={styles.footerText}>Great job! Streak preserved.</Text>
-                )}
             </View>
+
+            {/* STATUS TEXT (Optional Footer) */}
+            {isCompleted && (
+                <Text style={styles.footerText}>Great job! Streak preserved.</Text>
+            )}
         </View>
     );
 }
@@ -241,19 +255,37 @@ const styles = StyleSheet.create({
         width: '100%',
         alignItems: 'center',
         position: 'relative',
-        marginTop: 60, // More space for mascot head
+        marginTop: 40, // Reduced to pull closer to header
         marginBottom: 70, // More space for hanging button
         paddingHorizontal: 20, // ensure card considers screen padding if distinct
+    },
+    sheetContainer: {
+        width: '100%',
+        height: '100%',
+        alignItems: 'center',
+        paddingTop: 30
+    },
+    sheetContent: {
+        width: '100%',
+        alignItems: 'center',
+    },
+    watermarkIconContainer: {
+        position: 'absolute',
+        top: -20,
+        left: 10, // Move to left
+        opacity: 1, // Color handles opacity
+        zIndex: 0,
+        transform: [{ rotate: '-15deg' }]
     },
     // MASCOT - FRONT (Peeking Over)
     mascotContainer: {
         position: 'absolute',
-        top: -55,
-        right: 20,
-        width: 80,
-        height: 80,
+        top: -75,
+        right: 40,
+        width: 100,
+        height: 100,
         zIndex: 20, // Sit ON TOP of the card
-        transform: [{ rotate: '15deg' }],
+        transform: [{ rotate: '0deg' }],
     },
     mascotImage: {
         width: '100%',
@@ -262,8 +294,8 @@ const styles = StyleSheet.create({
     // ...
     speechBubble: {
         position: 'absolute',
-        top: -60, // Move up with mascot
-        right: 40,
+        top: 0, // Higher, right by Zippy (BossWidget gone)
+        right: 100, // To the left of Zippy
         backgroundColor: 'white',
         paddingHorizontal: 12,
         paddingVertical: 8,
@@ -285,18 +317,20 @@ const styles = StyleSheet.create({
     },
     speechArrow: {
         position: 'absolute',
-        bottom: -6,
-        right: 20,
+        top: 12, // Vertically centered
+        right: -6, // Sticking out right
         width: 0,
         height: 0,
         backgroundColor: 'transparent',
         borderStyle: 'solid',
-        borderLeftWidth: 6,
-        borderRightWidth: 6,
         borderTopWidth: 6,
-        borderLeftColor: 'transparent',
+        borderBottomWidth: 6,
+        borderLeftWidth: 6, // Points Right
+        borderRightWidth: 0,
+        borderTopColor: 'transparent',
+        borderBottomColor: 'transparent',
+        borderLeftColor: 'white',
         borderRightColor: 'transparent',
-        borderTopColor: 'white',
     },
     // CARD
     card: {
@@ -304,6 +338,9 @@ const styles = StyleSheet.create({
         width: '100%',
         borderRadius: 30, // Squircle-ish
         paddingTop: 40,
+        // ...
+        // borderColor: 'rgba(255, 255, 255, 0.4)', // Removed
+        // borderWidth: 1, // Removed
         paddingBottom: 60, // Extra space for content + visual balance
         paddingHorizontal: 24,
         alignItems: 'center', // Center text
@@ -329,7 +366,7 @@ const styles = StyleSheet.create({
     headerLabel: {
         fontSize: 12,
         fontWeight: '800',
-        color: '#9CA3AF',
+        color: '#000000', // Black
         letterSpacing: 3,
         textTransform: 'uppercase',
         marginBottom: 10,
@@ -338,7 +375,7 @@ const styles = StyleSheet.create({
     hugeText: {
         fontSize: 42, // Massive
         fontWeight: '900',
-        color: '#1F2937',
+        color: '#000000', // Black
         textAlign: 'center',
         marginBottom: 10,
         lineHeight: 46,
@@ -347,31 +384,23 @@ const styles = StyleSheet.create({
     // SLIDER
     sliderContainer: {
         position: 'absolute', // Break out!
-        bottom: -SLIDER_HEIGHT / 2, // Hang 50% off bottom
+        bottom: -SLIDER_HEIGHT * 1.2, // Move lower (Hang more than 100% off bottom of content)
         width: SLIDER_WIDTH,
         height: SLIDER_HEIGHT,
         borderRadius: SLIDER_HEIGHT / 2,
         justifyContent: 'center',
 
         // Heavy Color Shadow
-        shadowColor: "#3B82F6", // Blue glow
+        shadowColor: "#22c55e", // Green glow matches gradient
         shadowOffset: { width: 0, height: 8 },
-        shadowOpacity: 0.3,
+        shadowOpacity: 0.4,
         shadowRadius: 12,
         elevation: 15, // High elevation
 
-        backgroundColor: 'white',
+        backgroundColor: 'white', // Fallback, covered by gradient
         borderWidth: 4,
         borderColor: 'white', // Explicit white border as requested
         zIndex: 20, // Top most
-    },
-    sliderTrack: {
-        position: 'absolute',
-        width: '100%',
-        height: '100%',
-        borderRadius: SLIDER_HEIGHT / 2,
-        backgroundColor: '#F3F4F6',
-        overflow: 'hidden'
     },
     sliderFill: {
         position: 'absolute',
@@ -386,20 +415,17 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
         alignItems: 'center',
         flexDirection: 'row',
-        zIndex: 1,
+        zIndex: 10,
         paddingLeft: 40
     },
     sliderHintText: {
-        color: '#9CA3AF', // Lighter text on white bg? Or white on color fill? 
-        // Wait, track is start transparent/white. Fill covers it.
-        // Let's keep white for text assuming it's visible? 
-        // Actually if track is grey, text should be grey? 
-        // User didn't specify, but "Slide to complete" usually on track.
-        // Let's keep it white and assume strong shadow/contrast or maybe grey if track is light.
-        // Let's go with Silver for hint text if on empty track.
+        color: '#FFFFFF', // White text on Green Gradient
         fontWeight: '900',
         fontSize: 14,
         letterSpacing: 1,
+        textShadowColor: 'rgba(0,0,0,0.1)',
+        textShadowOffset: { width: 0, height: 1 },
+        textShadowRadius: 2
     },
     sliderThumb: {
         width: THUMB_SIZE,

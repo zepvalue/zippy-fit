@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { View } from 'react-native';
 import { Session } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
 import DashboardScreen from '../screens/DashboardScreen';
@@ -21,12 +21,12 @@ export default function Index() {
   }, []);
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: '#fff' }}>
+    <View style={{ flex: 1 }}>
       {session && session.user ? (
         <DashboardScreen session={session} />
       ) : (
         <AuthScreen />
       )}
-    </SafeAreaView>
+    </View>
   );
 }

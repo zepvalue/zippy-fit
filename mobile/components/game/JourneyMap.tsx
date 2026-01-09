@@ -13,7 +13,7 @@ interface JourneyMapProps {
 
 const { width } = Dimensions.get('window');
 const NODE_SIZE = 60;
-const VERTICAL_SPACING = 80;
+const VERTICAL_SPACING = 65; // Compact to fit in upper layer
 
 export default function JourneyMap({ history, onSpotRequest, canRequestSpot, spotStatus }: JourneyMapProps) {
     // Generate 7 days centered on today? 
@@ -33,12 +33,6 @@ export default function JourneyMap({ history, onSpotRequest, canRequestSpot, spo
 
     return (
         <View style={styles.container}>
-            <View style={styles.headerRow}>
-                <Text style={styles.title}>YOUR PATH</Text>
-                <View style={styles.streakBadge}>
-                    <Text style={styles.streakText}>7 DAY VIEW</Text>
-                </View>
-            </View>
 
             <View style={styles.mapContainer}>
                 {days.map((date, index) => {
@@ -119,11 +113,17 @@ export default function JourneyMap({ history, onSpotRequest, canRequestSpot, spo
 
                             <Animated.View
                                 entering={FadeInDown.delay(index * 100).springify()}
-                                style={[styles.nodeWrapper]}
+                                style={[
+                                    styles.nodeWrapper,
+                                    isToday && { transform: [{ scale: 1.2 }], zIndex: 30 } // Scale and lift
+                                ]}
                             >
                                 <LinearGradient
                                     colors={nodeColor as any}
-                                    style={styles.nodeInner}
+                                    style={[
+                                        styles.nodeInner,
+                                        isToday && { borderColor: '#FFFFFF', borderWidth: 2 } // White Ring
+                                    ]}
                                 >
                                     {/* LABEL */}
                                     <Text style={[styles.dateLabel, { color: iconColor }]}>
@@ -189,9 +189,10 @@ const styles = StyleSheet.create({
     },
     mapContainer: {
         alignItems: 'center',
-        // We need space for the zigzag widths
+        justifyContent: 'center',
         width: '100%',
-        paddingBottom: 40
+        height: '100%',
+        paddingBottom: 100 // Visual offset to lift center point above the sheet
     },
     row: {
         height: VERTICAL_SPACING,
