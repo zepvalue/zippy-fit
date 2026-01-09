@@ -1,8 +1,11 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, Dimensions, Image } from 'react-native';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+
+import React, { useEffect, useRef } from 'react';
+import { View, Text, StyleSheet, Dimensions, Image, ScrollView } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
+import { Cloud, Star, Disc } from 'lucide-react-native';
+import PathNode, { PathNodeStatus } from './PathNode';
+import Svg, { Path } from 'react-native-svg';
 
 interface JourneyMapProps {
     history: string[];
@@ -11,247 +14,245 @@ interface JourneyMapProps {
     spotStatus?: 'active' | 'none' | 'requested_by_partner';
 }
 
-const { width } = Dimensions.get('window');
-const NODE_SIZE = 60;
-const VERTICAL_SPACING = 65; // Compact to fit in upper layer
+const { width, height } = Dimensions.get('window');
+// Tuned for "Duolingo-style" Zig-Zag
+// We want significant horizontal travel (Amplitude) and relatively tight vertical packing.
+// This forces flattened, diagonal connector lines.
+// INCREASED to 180 to make the map taller (steeper angles)
+const TARGET_NODE_DISTANCE = 180;
+const TOP_PADDING = 80; // Reduced further to move map higher
+const BOTTOM_PADDING = 350; // HUGE spacing at bottom to clear the "Challenge Drawer"
+
+// Helper to check if a date is a "Boss" node
+const isBossNode = (date: Date, index: number) => {
+    // Arbitrary logic: Every 7 days or weekends
+    return (index + 1) % 7 === 0;
+};
+
+interface Point {
+    x: number;
+    y: number;
+}
 
 export default function JourneyMap({ history, onSpotRequest, canRequestSpot, spotStatus }: JourneyMapProps) {
-    // Generate 7 days centered on today? 
-    // User said "winding path with 7 circular stepping stones".
-    // Let's do: 3 days past, Today, 3 days future.
+    const scrollViewRef = useRef<ScrollView>(null);
     const today = new Date();
-    const days = [];
-    for (let i = -3; i <= 3; i++) {
-        const d = new Date();
-        d.setDate(today.getDate() + i);
-        days.push(d.toISOString().split('T')[0]);
+
+    // Generate Full Month Days
+    // From Day 1 to Last Day of current month
+    const year = today.getFullYear();
+    const month = today.getMonth();
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+
+    const days: string[] = [];
+    for (let i = 1; i <= daysInMonth; i++) {
+        const d = new Date(year, month, i);
+        // Handle timezone issue by forcing string format manually if needed,
+        // but toISOString().split('T')[0] is usually fine if we don't care about UTC shifts for visual display
+        // Better: create string manually to avoid UTC offset issues
+        const yyyy = d.getFullYear();
+        const mm = String(d.getMonth() + 1).padStart(2, '0');
+        const dd = String(d.getDate()).padStart(2, '0');
+        days.push(yyyy + '-' + mm + '-' + dd);
     }
 
-    // Determine Mascot
-    // (We reuse the assets from dashboard context roughly, but hardcode for now or pass as prop)
     const mascotSource = require('../../assets/animations/happy_zippy_animated.gif');
 
+    // Dynamic Snake/Zig-Zag Logic
+    // FREQUENCY = PI / 2 creates a sharp Zig-Zag.
+    const containerWidth = width;
+    const AMPLITUDE = containerWidth * 0.35;
+    const FREQUENCY = Math.PI / 2;
+
+    // --- COORDINATE GENERATION (CONSTANT DISTANCE) ---
+    const points: Point[] = [];
+
+    for (let i = 0; i < days.length; i++) {
+        // Calculate Target X
+        const x = (width / 2) + (Math.sin(i * FREQUENCY) * AMPLITUDE);
+
+        let y = TOP_PADDING;
+
+        if (i > 0) {
+            const prev = points[i - 1];
+            const dx = Math.abs(x - prev.x);
+            // Ensure visual consistency
+            const validDx = Math.min(dx, TARGET_NODE_DISTANCE - 1);
+            const dy = Math.sqrt(Math.pow(TARGET_NODE_DISTANCE, 2) - Math.pow(validDx, 2));
+            y = prev.y + dy;
+        }
+
+        points.push({ x, y });
+    }
+
+    const contentHeight = points[points.length - 1].y + BOTTOM_PADDING;
+
+    // --- SVG PATH GENERATION ---
+    let pathD = `M ${points[0].x} ${points[0].y} `;
+    for (let i = 0; i < points.length - 1; i++) {
+        const current = points[i];
+        const next = points[i + 1];
+
+        const dy = next.y - current.y;
+        const k = dy * 0.5;
+
+        const cp1 = { x: current.x, y: current.y + k };
+        const cp2 = { x: next.x, y: next.y - k };
+        pathD += ` C ${cp1.x} ${cp1.y} ${cp2.x} ${cp2.y} ${next.x} ${next.y} `;
+    }
+
+    // Determine cutoff for solid path
+    // Find index of today
+    const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+    const todayIndex = days.indexOf(todayStr); // -1 if not found (impossible ideally)
+    const realTodayIndex = todayIndex !== -1 ? todayIndex : 0;
+
+    let solidPathD = `M ${points[0].x} ${points[0].y} `;
+    for (let i = 0; i < realTodayIndex; i++) {
+        const current = points[i];
+        const next = points[i + 1];
+        const dy = next.y - current.y;
+        const k = dy * 0.5;
+        const cp1 = { x: current.x, y: current.y + k };
+        const cp2 = { x: next.x, y: next.y - k };
+        solidPathD += ` C ${cp1.x} ${cp1.y} ${cp2.x} ${cp2.y} ${next.x} ${next.y} `;
+    }
+
+    // Generate random environmental props (Evenly Distributed)
+    const renderEnvironment = () => {
+        const items = [];
+        // Generate decor relative to content height
+        const decorCount = Math.floor(contentHeight / 100); // 1 item every 100px approx
+
+        for (let i = 0; i < decorCount; i++) {
+            const yPos = Math.random() * contentHeight;
+            const xPos = Math.random() * width;
+            const size = 10 + Math.random() * 30;
+            const opacity = 0.2 + Math.random() * 0.4;
+
+            if (i % 3 === 0) {
+                items.push(<Cloud key={`c${i} `} size={size * 2} color="white" style={{ position: 'absolute', top: yPos, left: xPos, opacity: opacity * 0.5 }} />);
+            } else if (i % 3 === 1) {
+                items.push(<Star key={`s${i} `} size={size} color="#FCD34D" style={{ position: 'absolute', top: yPos, left: xPos, opacity: opacity }} />);
+            } else {
+                items.push(<Disc key={`d${i} `} size={size * 0.5} color="#D1D5DB" style={{ position: 'absolute', top: yPos, left: xPos, opacity: opacity }} />);
+            }
+        }
+        return items;
+    };
+
+    // Auto-Scroll to Today
+    useEffect(() => {
+        if (scrollViewRef.current && todayIndex !== -1) {
+            const y = points[todayIndex].y;
+            // Center the node higher up: ScrollTo y - screenHeight * 0.4
+            // This places the node at 40% from the top of the screen
+            const scrollY = Math.max(0, y - height * 0.4);
+            setTimeout(() => {
+                scrollViewRef.current?.scrollTo({ y: scrollY, animated: true });
+            }, 500); // Slight delay for layout
+        }
+    }, []);
+
     return (
-        <View style={styles.container}>
+        <ScrollView
+            ref={scrollViewRef}
+            style={styles.container}
+            contentContainerStyle={{ height: contentHeight }}
+            showsVerticalScrollIndicator={false}
+        >
+            {/* Environmental Depth Layer */}
+            <View style={StyleSheet.absoluteFill} pointerEvents="none">
+                {renderEnvironment()}
+            </View>
 
-            <View style={styles.mapContainer}>
+            {/* SVG Path Layer */}
+            <View style={StyleSheet.absoluteFill} pointerEvents="none">
+                <Svg width={width} height={contentHeight} style={{ position: 'absolute', top: 0 }}>
+                    <Path
+                        d={pathD}
+                        stroke="rgba(255,255,255,0.3)"
+                        strokeWidth="4"
+                        strokeDasharray="10, 10"
+                        fill="none"
+                    />
+                    <Path
+                        d={solidPathD}
+                        stroke="white"
+                        strokeWidth="4"
+                        fill="none"
+                    />
+                </Svg>
+            </View>
+
+            {/* Nodes Container */}
+            <View style={{ width: '100%', height: contentHeight }}>
                 {days.map((date, index) => {
-                    const isToday = date === today.toISOString().split('T')[0];
-                    const isPast = new Date(date) < new Date(today.toISOString().split('T')[0]);
-                    const isFuture = new Date(date) > new Date(today.toISOString().split('T')[0]);
-
+                    const isToday = date === todayStr;
                     const isCompleted = history.includes(date);
 
-                    // ZIG ZAG LOGIC
-                    // We want the path to wind back and forth.
-                    // 0: Center
-                    // 1: Right
-                    // 2: Center (or Left?)
-                    // Let's do Sine wave: Center -> Right -> Center -> Left -> Center...
-                    // Indices: 0, 1, 2, 3, 4, 5, 6
-                    // Offsets from center: 0, +50, 0, -50, 0, +50, 0
-
-                    const offsets = [0, 60, 0, -60, 0, 60, 0];
-                    const nodeXOffset = offsets[index];
-
-                    // STYLES
-                    // Past/Completed: Glowing Green
-                    // Today: Zippy
-                    // Future: Grey
-
-                    let nodeColor = ['#E5E7EB', '#D1D5DB', '#9CA3AF']; // Grey 3D
-                    let iconName = "lock";
-                    let iconColor = "#9CA3AF";
-                    let textColor = "#6B7280";
-                    let opacity = 0.5;
-
-                    if (isCompleted) {
-                        // GLOWING GREEN
-                        nodeColor = ['#a3e635', '#4ade80', '#16a34a'];
-                        iconName = "check-bold";
-                        iconColor = "white";
-                        textColor = "#14532D";
-                        opacity = 1;
-                    } else if (isToday) {
-                        // ACTIVE (Orange or Neutral waiting)
-                        // User said "Current day has Zippy". 
-                        // If not done, it should look active.
-                        nodeColor = ['#FEF08A', '#FACC15', '#CA8A04']; // Yellow/Gold
-                        iconName = "star";
-                        iconColor = "white";
-                        textColor = "#713F12";
-                        opacity = 1;
+                    let status: PathNodeStatus = 'locked';
+                    const dateObj = new Date(date);
+                    // Simple logic for Past/Future based on index
+                    if (index < todayIndex) {
+                        status = isCompleted ? 'perfect' : 'locked';
+                    } else if (index === todayIndex) {
+                        status = 'active';
+                    } else {
+                        status = isBossNode(dateObj, index) ? 'boss' : 'locked';
                     }
 
+                    // Absolute Position
+                    const { x, y } = points[index];
+
                     return (
-                        <View key={date} style={[styles.row, { left: nodeXOffset }]}>
-                            {/* CONNECTOR (Absolute) */}
-                            {/* The connector needs to originate from the center of this node visually 
-                                 It's hard to position perfectly in a relative flow. 
-                                 Let's actually put the connectors in a separate layer or calculated carefully.
-                                 
-                                 Simplified Approach: 
-                                 Just draw a line between centers. 
-                                 I'll use a hacky rotation on a view placed absolute bottom center.
-                             */}
-                            {index < days.length - 1 && (
-                                <View style={{ position: 'absolute', top: NODE_SIZE / 2, left: NODE_SIZE / 2 - 1, zIndex: -1 }}>
-                                    {/* Calculated Connector */}
-                                    <View style={{
-                                        width: 4,
-                                        height: Math.sqrt(VERTICAL_SPACING ** 2 + (offsets[index + 1] - nodeXOffset) ** 2),
-                                        backgroundColor: (isCompleted || (isToday && isCompleted))
-                                            ? '#4ADE80' // Green if path traveled
-                                            : 'rgba(255,255,255,0.3)', // Semi-transparent white "drawn" effect
-                                        transformOrigin: 'top center',
-                                        transform: [
-                                            { rotate: `${-Math.atan2(offsets[index + 1] - nodeXOffset, VERTICAL_SPACING)}rad` }
-                                        ]
-                                    }} />
-                                </View>
+                        <Animated.View
+                            key={date}
+                            entering={FadeInDown.delay(index * 50).springify()} // Faster stagger
+                            style={{
+                                position: 'absolute',
+                                left: x - 40,
+                                top: y - 40,
+                                width: 80,
+                                height: 80,
+                                justifyContent: 'center',
+                                alignItems: 'center',
+                                zIndex: 10
+                            }}
+                        >
+                            <PathNode
+                                day={new Date(date).getDate()}
+                                status={status}
+                                isToday={isToday}
+                            />
+
+                            {isToday && (
+                                <Animated.View entering={FadeIn.delay(500)} style={styles.mascotContainer}>
+                                    <Image source={mascotSource} style={styles.mascotImage} resizeMode="contain" />
+                                </Animated.View>
                             )}
-
-                            <Animated.View
-                                entering={FadeInDown.delay(index * 100).springify()}
-                                style={[
-                                    styles.nodeWrapper,
-                                    isToday && { transform: [{ scale: 1.2 }], zIndex: 30 } // Scale and lift
-                                ]}
-                            >
-                                <LinearGradient
-                                    colors={nodeColor as any}
-                                    style={[
-                                        styles.nodeInner,
-                                        isToday && { borderColor: '#FFFFFF', borderWidth: 2 } // White Ring
-                                    ]}
-                                >
-                                    {/* LABEL */}
-                                    <Text style={[styles.dateLabel, { color: iconColor }]}>
-                                        {new Date(date).getDate()}
-                                    </Text>
-                                    <Text style={[styles.dayLabel, { color: iconColor }]}>
-                                        {new Date(date).toLocaleDateString('en-US', { weekday: 'short' }).toUpperCase()}
-                                    </Text>
-
-                                    {/* ICON (Small) */}
-                                    {/* <MaterialCommunityIcons name={iconName} size={16} color={iconColor} style={{ marginTop: 2}} /> */}
-                                </LinearGradient>
-
-                                {/* MASCOT ON TOP (If Today) */}
-                                {isToday && (
-                                    <Animated.View entering={FadeIn.delay(500)} style={styles.mascotContainer}>
-                                        <Image source={mascotSource} style={styles.mascotImage} resizeMode="contain" />
-                                    </Animated.View>
-                                )}
-
-                                {/* GLOW EFFECT (If Past/Check) */}
-                                {isCompleted && (
-                                    <View style={styles.glow} />
-                                )}
-                            </Animated.View>
-                        </View>
+                        </Animated.View>
                     );
                 })}
             </View>
-        </View>
+        </ScrollView>
     );
 }
 
 const styles = StyleSheet.create({
     container: {
+        flex: 1,
         width: '100%',
-        alignItems: 'center',
-        paddingVertical: 20
-    },
-    headerRow: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        width: '100%',
-        paddingHorizontal: 20,
-        marginBottom: 30
-    },
-    title: {
-        fontSize: 12,
-        fontWeight: '900',
-        color: '#9CA3AF',
-        letterSpacing: 2
-    },
-    streakBadge: {
-        backgroundColor: '#E5E7EB',
-        borderRadius: 12,
-        paddingHorizontal: 8,
-        paddingVertical: 2
-    },
-    streakText: {
-        fontSize: 10,
-        fontWeight: 'bold',
-        color: '#6B7280'
-    },
-    mapContainer: {
-        alignItems: 'center',
-        justifyContent: 'center',
-        width: '100%',
-        height: '100%',
-        paddingBottom: 100 // Visual offset to lift center point above the sheet
-    },
-    row: {
-        height: VERTICAL_SPACING,
-        justifyContent: 'flex-start', // Top aligned of the row
-        alignItems: 'center',
-        position: 'relative',
-        zIndex: 10
-    },
-    nodeWrapper: {
-        width: NODE_SIZE,
-        height: NODE_SIZE,
-        borderRadius: NODE_SIZE / 2,
-        // 3D Shadow
-        shadowColor: "#000",
-        shadowOffset: { width: 0, height: 6 },
-        shadowOpacity: 0.2,
-        shadowRadius: 5,
-        elevation: 8,
-        backgroundColor: 'white' // Fallback
-    },
-    nodeInner: {
-        width: '100%',
-        height: '100%',
-        borderRadius: NODE_SIZE / 2,
-        justifyContent: 'center',
-        alignItems: 'center',
-        borderWidth: 2,
-        borderColor: 'rgba(255,255,255,0.4)',
-        borderBottomWidth: 5, // Thick bottom for 3D
-        borderBottomColor: 'rgba(0,0,0,0.1)' // Fake depth
-    },
-    dateLabel: {
-        fontWeight: '900',
-        fontSize: 16
-    },
-    dayLabel: {
-        fontSize: 8,
-        fontWeight: 'bold',
-        marginTop: 0
     },
     mascotContainer: {
         position: 'absolute',
-        top: -45, // Sit on top
-        width: 80,
-        height: 80,
+        top: -60,
+        width: 100,
+        height: 100,
         zIndex: 20
     },
     mascotImage: {
         width: '100%',
         height: '100%'
-    },
-    glow: {
-        position: 'absolute',
-        width: '100%',
-        height: '100%',
-        borderRadius: 30,
-        backgroundColor: '#4ade80',
-        opacity: 0.4,
-        zIndex: -1,
-        transform: [{ scale: 1.2 }]
     }
 });

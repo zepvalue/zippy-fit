@@ -6,14 +6,10 @@ import { api } from '../lib/api';
 import { supabase } from '../lib/supabase';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { StatusBar } from 'expo-status-bar';
-import { BlurView } from 'expo-blur';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
 import { GestureDetector, Gesture, GestureHandlerRootView } from 'react-native-gesture-handler';
 import Animated, { useSharedValue, useAnimatedStyle, withSpring, interpolate, Extrapolate, runOnJS, withTiming } from 'react-native-reanimated';
-import ChallengeOfTheDay from '../components/game/ChallengeOfTheDay';
 import JourneyMap from '../components/game/JourneyMap';
-import BossWidget from '../components/game/BossWidget';
 import ProfileModal from '../components/ui/ProfileModal';
 import DebugMenu from '../components/game/DebugMenu';
 import TutorialScreen from '../screens/TutorialScreen';
@@ -287,83 +283,53 @@ export default function DashboardScreen() {
                     />
                 </Animated.View>
 
-                {/* LAYER 1: HEADER (Overlay) */}
+                {/* LAYER 1: HEADER (Gamer HUD) */}
                 <View style={{ flex: 1, position: 'relative', pointerEvents: 'box-none' }}>
-
-                    {/* TOP LABELS (Above Icons) */}
-                    <View style={{
-                        position: 'absolute',
-                        top: insets.top, // Start right at inset
-                        width: '100%',
-                        zIndex: 60,
-                        flexDirection: 'row',
-                        justifyContent: 'space-between',
-                        alignItems: 'center',
-                        paddingHorizontal: 20,
-                        paddingBottom: 5, // Only padding bottom, no top padding
-                        marginTop: 0 // Ensure no margin
-                    }}>
-                        <Text style={styles.topLabelLeft}>YOUR PATH</Text>
-                        <View style={styles.topLabelRightContainer}>
-                            <Text style={styles.topLabelRight}>7 DAY VIEW</Text>
-                        </View>
-                    </View>
-
-                    {/* HEADER - HUB & SPOKE LAYOUT (Moved Down) */}
                     <View style={{
                         position: 'absolute',
                         top: 0,
                         width: '100%',
                         zIndex: 50,
-                        paddingTop: Math.max(15, insets.top + 50), // 50px offset for top labels
+                        paddingTop: insets.top + 10,
                         paddingHorizontal: 20,
                         flexDirection: 'row',
                         justifyContent: 'space-between',
                         alignItems: 'center',
                     }}>
-                        {/* LEFT: Grimoire (Scroll) Icon */}
+                        {/* LEFT: Ghost Action (Grimoire) */}
                         <TouchableOpacity
                             onPress={() => { setGrimoireVisible(true); setProfileVisible(false); }}
-                            style={styles.iconButton}
+                            style={styles.ghostButton}
                         >
-                            <MaterialCommunityIcons name="script-text-outline" size={26} color="#1F2937" />
+                            <MaterialCommunityIcons name="script-text-outline" size={32} color="#1F2937" />
                         </TouchableOpacity>
 
-                        {/* CENTER: Stats Pill */}
-                        <View style={{
-                            position: 'absolute',
-                            left: 0,
-                            right: 0,
-                            top: Math.max(15, insets.top + 50), // Match padding top offset
-                            alignItems: 'center',
-                            zIndex: 0
-                        }} pointerEvents="box-none">
-                            <View style={styles.statsPillContainer}>
-                                <View style={styles.statItem}>
-                                    <MaterialCommunityIcons name="heart" size={20} color="#EF4444" />
-                                    <Text style={styles.statTextPill}>{hearts}</Text>
-                                </View>
-                                <View style={styles.statItem}>
-                                    <MaterialCommunityIcons name="fire" size={20} color="#F97316" />
-                                    <Text style={styles.statTextPill}>{streak}</Text>
-                                </View>
-                                <View style={styles.statItem}>
-                                    <MaterialCommunityIcons name="snowflake" size={20} color="#3B82F6" />
-                                    <Text style={styles.statTextPill}>{freezes}</Text>
-                                </View>
-                            </View>
-                        </View>
-
-                        {/* RIGHT: Profile Avatar */}
+                        {/* RIGHT: Super Pill (Avatar + Stats) */}
                         <TouchableOpacity
                             onPress={() => { setProfileVisible(true); setGrimoireVisible(false); }}
-                            style={[styles.iconButton, { padding: 2 }]} // Extra padding for border internal
+                            style={styles.superPill}
+                            activeOpacity={0.9}
                         >
-                            <Image
-                                source={require('../assets/animations/happy_zippy_animated.gif')}
-                                style={{ width: '100%', height: '100%', borderRadius: 999 }}
-                                resizeMode="cover"
-                            />
+                            {/* Avatar (Gear) */}
+                            <View style={[styles.superPillAvatarContainer, { justifyContent: 'center', alignItems: 'center', backgroundColor: '#EEE' }]}>
+                                <MaterialCommunityIcons name="cog" size={24} color="#1F2937" />
+                            </View>
+
+                            {/* Stats */}
+                            <View style={styles.superPillStatsRow}>
+                                <View style={styles.superPillStatItem}>
+                                    <MaterialCommunityIcons name="heart" size={16} color="#EF4444" />
+                                    <Text style={styles.superPillStatText}>{hearts}</Text>
+                                </View>
+                                <View style={styles.superPillStatItem}>
+                                    <MaterialCommunityIcons name="fire" size={16} color="#F97316" />
+                                    <Text style={styles.superPillStatText}>{streak}</Text>
+                                </View>
+                                <View style={styles.superPillStatItem}>
+                                    <MaterialCommunityIcons name="snowflake" size={16} color="#3B82F6" />
+                                    <Text style={styles.superPillStatText}>{freezes}</Text>
+                                </View>
+                            </View>
                         </TouchableOpacity>
                     </View>
                 </View>
@@ -480,68 +446,55 @@ const styles = StyleSheet.create({
         textShadowRadius: 3,
         marginLeft: 4
     },
-    statsPillContainer: {
+    ghostButton: {
+        width: 48,
+        height: 48,
+        justifyContent: 'center',
+        alignItems: 'center',
+        backgroundColor: 'transparent',
+    },
+    superPill: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: 'rgba(255,255,255,0.95)', // Solid/High Opacity White
-        borderRadius: 50,
-        paddingHorizontal: 20,
-        paddingVertical: 10,
-        gap: 15,
+        backgroundColor: 'rgba(255,255,255,0.95)',
+        borderRadius: 30,
+        paddingLeft: 4, // Space for avatar
+        paddingRight: 16, // Space on right
+        paddingVertical: 4,
         shadowColor: "#000",
         shadowOffset: { width: 0, height: 2 },
         shadowOpacity: 0.1,
         shadowRadius: 4,
-        elevation: 3
+        elevation: 3,
+        height: 52
     },
-    statItem: {
+    superPillAvatarContainer: {
+        width: 44,
+        height: 44,
+        borderRadius: 22,
+        borderWidth: 2,
+        borderColor: '#FFFFFF',
+        overflow: 'hidden',
+        marginRight: 12
+    },
+    superPillAvatarImage: {
+        width: '100%',
+        height: '100%'
+    },
+    superPillStatsRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 12
+    },
+    superPillStatItem: {
         flexDirection: 'row',
         alignItems: 'center',
         gap: 4
     },
-    statTextPill: {
+    superPillStatText: {
         fontSize: 14,
-        fontWeight: 'bold',
-        color: '#1F2937'
-    },
-    headerRight: {
-        flexDirection: 'row',
-        gap: 12
-    },
-    iconButton: {
-        width: 52,
-        height: 52,
-        justifyContent: 'center',
-        alignItems: 'center',
-        borderRadius: 26,
-        overflow: 'hidden',
-        borderWidth: 2,
-        borderColor: '#FFFFFF',
-        backgroundColor: 'rgba(255,255,255,0.95)', // Solid/High Opacity White (Unified)
-        shadowColor: "#000",
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 4,
-        elevation: 3
-    },
-    topLabelLeft: {
-        fontSize: 12,
-        fontWeight: '900',
-        color: 'rgba(255,255,255,0.7)',
-        letterSpacing: 1,
-        textTransform: 'uppercase'
-    },
-    topLabelRightContainer: {
-        backgroundColor: 'rgba(255,255,255,0.8)',
-        borderRadius: 12,
-        paddingHorizontal: 10,
-        paddingVertical: 4
-    },
-    topLabelRight: {
-        fontSize: 10,
         fontWeight: '800',
-        color: '#4B5563',
-        textTransform: 'uppercase'
+        color: '#1F2937'
     },
     teamStatusContainer: {
         width: '100%',
