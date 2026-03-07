@@ -194,7 +194,7 @@ export default function DashboardScreen() {
     return (
         <GestureHandlerRootView style={{ flex: 1 }}>
             <ImageBackground
-                source={require('../assets/images/fitness_bg.png')}
+                source={require('../assets/images/fitness_bg.jpg')}
                 style={styles.backgroundImage}
                 resizeMode="cover"
             >
