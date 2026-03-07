@@ -12,6 +12,7 @@ LogBox.ignoreLogs([
 ]);
 
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+import ConvexClientProvider from '../components/ConvexClientProvider';
 
 SplashScreen.preventAutoHideAsync();
 
@@ -31,11 +32,13 @@ export default function RootLayout() {
   }
 
   return (
-    <SafeAreaProvider>
-      <Stack screenOptions={{ headerShown: false }}>
-        {/* This configuration applies to ALL screens */}
-        <Stack.Screen name="index" />
-      </Stack>
-    </SafeAreaProvider>
+    <ConvexClientProvider>
+      <SafeAreaProvider>
+        <Stack screenOptions={{ headerShown: false }}>
+          {/* This configuration applies to ALL screens */}
+          <Stack.Screen name="index" />
+        </Stack>
+      </SafeAreaProvider>
+    </ConvexClientProvider>
   );
 }

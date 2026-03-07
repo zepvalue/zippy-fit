@@ -8,7 +8,7 @@
     envVars:
       - key: PYTHON_VERSION
         value: 3.10.0
-      - key: SUPABASE_URL
+      - key: CONVEX_DEPLOYMENT
         sync: false
-      - key: SUPABASE_KEY
+      - key: CONVEX_URL
         sync: false

@@ -1,5 +1,5 @@
 fastapi
 uvicorn
-supabase
+convex
 python-dotenv
 pydantic

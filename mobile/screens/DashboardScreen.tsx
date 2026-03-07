@@ -1,9 +1,9 @@
-import { View, Text, StyleSheet, ScrollView, RefreshControl, Dimensions, TouchableOpacity, Platform, Alert, Image, Modal, ImageBackground } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, RefreshControl, Dimensions, TouchableOpacity, Platform, Alert, Image, Modal, ImageBackground, ActivityIndicator } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'expo-router';
-import { api } from '../lib/api';
-import { supabase } from '../lib/supabase';
+import { useQuery, useMutation } from 'convex/react';
+import { api } from '../convex/_generated/api';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { StatusBar } from 'expo-status-bar';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
@@ -15,71 +15,36 @@ import DebugMenu from '../components/game/DebugMenu';
 import TutorialScreen from '../screens/TutorialScreen';
 import GrimoireModal from '../components/game/GrimoireModal';
 import ChallengeDrawer from '../components/game/ChallengeDrawer';
+import { useConvexAuth } from 'convex/react';
+import { useAuthActions } from "@convex-dev/auth/react";
 
 const { width } = Dimensions.get('window');
 
 export default function DashboardScreen() {
-    const insets = useSafeAreaInsets(); // Moved up: Must be before conditional returns
+    const insets = useSafeAreaInsets();
     const router = useRouter();
-    const [refreshing, setRefreshing] = useState(false);
-    const [isLoading, setIsLoading] = useState(true);
+    const { signOut } = useAuthActions();
 
-    // DASHBOARD STATE
-    const [teamId, setTeamId] = useState<string | null>(null);
-    const [teamName, setTeamName] = useState("Loading...");
-    const [teamCode, setTeamCode] = useState("...");
-    const [memberCount, setMemberCount] = useState(1);
-    const [hearts, setHearts] = useState(3);
-    const [streak, setStreak] = useState(0);
-    const [freezes, setFreezes] = useState(0);
-    const [status, setStatus] = useState("AT_RISK");
-    const [userDone, setUserDone] = useState(false);
-    const [partnerDone, setPartnerDone] = useState(false);
-    const [teamCompletionCount, setTeamCompletionCount] = useState(0);
-    const [history, setHistory] = useState<string[]>([]);
+    // CONVEX QUERIES (Reactive!)
+    const dashboardData = useQuery(api.dashboard.get);
+    const challenge = useQuery(api.challenges.get);
+    const history = useQuery(api.workouts.history) || [];
 
-    const [hasTeam, setHasTeam] = useState<boolean | null>(null);
-    const [challengeData, setChallengeData] = useState({ text: "Loading...", base_count: 0, unit: "" });
+    // CONVEX MUTATIONS
+    const logWorkout = useMutation(api.workouts.log);
+    const sendNudge = useMutation(api.teams.nudge);
 
-    // BOSS STATE
-    const [bossData, setBossData] = useState({
-        hp: 10000,
-        maxHp: 10000,
-        name: "The Sloth King",
-        imageIndex: 0
-    });
-
-    // MODAL STATE
+    // LOCAL STATE
     const [profileVisible, setProfileVisible] = useState(false);
     const [debugVisible, setDebugVisible] = useState(false);
     const [tutorialVisible, setTutorialVisible] = useState(false);
-
-    // SECRET SCROLL STATE
     const [scrollVisible, setScrollVisible] = useState(false);
     const [unlockedFact, setUnlockedFact] = useState<{ title: string; text: string } | null>(null);
     const [grimoireVisible, setGrimoireVisible] = useState(false);
 
-    // AUTH STATE
-    const [session, setSession] = useState<any>(null);
-
     useEffect(() => {
         checkTutorial();
-        fetchData();
-        fetchSession();
     }, []);
-
-    const fetchSession = async () => {
-        try {
-            if (!supabase) {
-                console.error("❌ Supabase object is undefined!");
-                return;
-            }
-            const { data } = await supabase.auth.getSession();
-            setSession(data.session);
-        } catch (e) {
-            console.error("❌ Error fetching session:", e);
-        }
-    };
 
     const checkTutorial = async () => {
         const done = await AsyncStorage.getItem('tutorial_completed');
@@ -88,118 +53,47 @@ export default function DashboardScreen() {
         }
     };
 
-    const handleAuthError = async () => {
-        console.log("🚨 Auth Error detected! Logging out...");
-        await AsyncStorage.removeItem('userToken');
-        await supabase.auth.signOut();
-        router.replace('/');
-    };
+    // Derived State from Convex Data
+    const isLoading = dashboardData === undefined;
 
-    const fetchData = async () => {
-        try {
-            let token = await AsyncStorage.getItem('userToken');
-
-            // SELF-HEAL: If no local token, but checking Supabase might help?
-            if (!token) {
-                const { data } = await supabase.auth.getSession();
-                if (data.session?.access_token) {
-                    console.log("DEBUG: Recovered token from Supabase Session");
-                    token = data.session.access_token;
-                    await AsyncStorage.setItem('userToken', token);
-                } else {
-                    console.log("DEBUG: No token. Stopping fetch.");
-                    // Force logout if no token available at all on dashboard load?
-                    // Maybe, or just stay here. Logic above implies silent fail.
-                    // Let's rely on api call failing.
-                    router.replace('/'); // Redirect if absolutely no token
-                    return;
-                }
-            }
-
-            const data = await api.getDashboard(token);
-
-            if (data?.error === 'AUTH_ERROR') {
-                await handleAuthError();
-                return;
-            }
-
-            if (data) {
-                setHasTeam(data.has_team);
-                if (data.has_team) {
-                    setTeamId(data.team_id);
-                    setTeamName(data.team_name);
-                    setTeamCode(data.code);
-                    setMemberCount(data.member_count);
-                    setTeamCompletionCount(data.team_completion_count);
-                    setHearts(data.hearts);
-                    setStreak(data.streak);
-                    setFreezes(data.freezes_available);
-                    setStatus(data.status);
-                    // Only update if not optimistically set
-                    // actually, server is truth, allow overwrite
-                    setUserDone(data.user_completed_today);
-                    setPartnerDone(data.partner_completed_today);
-
-                    setBossData({
-                        hp: data.boss_hp ?? 10000,
-                        maxHp: data.boss_max_hp ?? 10000,
-                        name: data.boss_name || "The Sloth King",
-                        imageIndex: data.boss_image_index ?? 0
-                    });
-                } else {
-                    setTeamCode("NO TEAM");
-                }
-            }
-
-            const chal = await api.getChallenge(token);
-            if (chal) setChallengeData(chal);
-
-            const hist = await api.getHistory(token);
-            if (hist) setHistory(hist);
-        } catch (error) {
-            console.log("Error fetching data:", error);
-        } finally {
-            setRefreshing(false);
-            setIsLoading(false);
-        }
-    };
-
-    const handleRefresh = () => {
-        setRefreshing(true);
-        fetchData();
-    };
+    // Safely extract data
+    const hasTeam = dashboardData?.has_team || false;
+    const teamId = dashboardData?.team_id;
+    const teamName = dashboardData?.team_name || "Loading...";
+    const teamCode = dashboardData?.code || "...";
+    const memberCount = dashboardData?.member_count || 1;
+    const hearts = dashboardData?.hearts || 3;
+    const streak = dashboardData?.streak || 0;
+    const freezes = dashboardData?.freezes_available || 0;
+    const status = dashboardData?.status || "AT_RISK";
+    const userDone = dashboardData?.user_completed_today || false;
+    const partnerDone = dashboardData?.partner_completed_today || false;
+    const challengeData = challenge || { text: "Loading...", base_count: 0, unit: "" };
 
     const handleComplete = async () => {
         console.log("🟢 HandleComplete Triggered in Dashboard!");
-        const token = await AsyncStorage.getItem('userToken');
-        if (token) {
-            console.log("🟢 Token found, sending API request...");
-            setUserDone(true); // Optimistic update
-
-            // Force re-render to show spinner or something? 
-            // setRefreshing(true); // Maybe not, might be jarring.
-
-            setTeamCompletionCount(prev => prev + 1);
+        try {
+            // Optimistic updates are handled by Convex automatically!
+            // But we might want to show a spinner if it's slow.
 
             const damage = 500;
-            console.log(`🟢 Logging workout with damage: ${damage}`);
-            const res = await api.logWorkout(token, damage);
+            const res = await logWorkout({ damage, duration_minutes: 30 });
             console.log("🟢 API Response for Workout:", JSON.stringify(res));
 
-            if (res.status === 'success' || res.status === 'logged' || res.status === 'streak_incremented') {
-                console.log("🟢 Success! Refreshing data...");
-                fetchData();
-
-                if (res.new_fact) {
-                    console.log("📜 New Fact unlocked!");
-                    setUnlockedFact(res.new_fact);
-                    setTimeout(() => setScrollVisible(true), 1000);
-                }
-            } else {
-                console.log("🔴 API returned non-success status:", res.status);
+            if (res.new_fact_id) {
+                // Fetch the fact text? 
+                // The mutation returns ID. We need the text.
+                // Ideally mutation returns the fact object. UseQuery for grimoire will update.
+                // For now, let's just say "New Fact Unlocked" and let them check Grimoire, 
+                // OR fetch grimoire and find it.
+                // Simpler: Just show "Check Grimoire!"
+                console.log("📜 New Fact unlocked!");
+                setUnlockedFact({ title: "New Knowledge!", text: "Check your grimoire to see what you learned." });
+                setTimeout(() => setScrollVisible(true), 1000);
             }
-        } else {
-            console.log("🔴 No User Token found in AsyncStorage!");
+        } catch (e: any) {
+            console.error("Error logging workout", e);
+            Alert.alert("Error", e.message);
         }
     };
 
@@ -207,6 +101,37 @@ export default function DashboardScreen() {
         if (status === 'SAFE') return 'SAFE';
         if (userDone && status !== 'SAFE') return 'SLEEPING';
         return status as 'SAFE' | 'AT_RISK' | 'SLEEPING';
+    };
+
+    // NUDGE LOGIC
+    const handleNudge = async () => {
+        if (!hasTeam) {
+            Alert.alert("Solo Mode", "You need a partner to nudge!");
+            return;
+        }
+        if (partnerDone) {
+            Alert.alert("Already Done!", "Your partner has already finished their workout. Give them a high five instead!");
+            return;
+        }
+
+        Alert.alert(
+            "Send Nudge?",
+            "Wake up your partner with a notification?",
+            [
+                { text: "Cancel", style: "cancel" },
+                {
+                    text: "NUDGE!",
+                    onPress: async () => {
+                        try {
+                            await sendNudge({});
+                            Alert.alert("Sent!", "Your partner has been nudged.");
+                        } catch (e: any) {
+                            Alert.alert("Error", e.message);
+                        }
+                    }
+                }
+            ]
+        );
     };
 
     // --- ANIMATIONS & GESTURES ---
@@ -278,7 +203,7 @@ export default function DashboardScreen() {
                 {/* LAYER 0: GAME WORLD (Background - Fullscreen) */}
                 <Animated.View style={[styles.mapContainer, rMapStyle]}>
                     <JourneyMap
-                        history={history}
+                        history={history.map(h => h.date)}
                         canRequestSpot={false}
                     />
                 </Animated.View>
@@ -293,50 +218,87 @@ export default function DashboardScreen() {
                         paddingTop: insets.top + 10,
                         paddingHorizontal: 20,
                         flexDirection: 'row',
-                        justifyContent: 'space-between',
+                        justifyContent: 'center',
                         alignItems: 'center',
                     }}>
-                        {/* LEFT: Ghost Action (Grimoire) */}
-                        <TouchableOpacity
-                            onPress={() => { setGrimoireVisible(true); setProfileVisible(false); }}
-                            style={styles.ghostButton}
-                        >
-                            <MaterialCommunityIcons name="script-text-outline" size={32} color="#1F2937" />
-                        </TouchableOpacity>
+                        {/* SINGLE MEGA PILL: Grimoire | Team | Stats | Settings */}
+                        <View style={styles.megaPill}>
+                            {/* 1. Grimoire (Left) */}
+                            <TouchableOpacity
+                                onPress={() => { setGrimoireVisible(true); setProfileVisible(false); }}
+                                activeOpacity={0.7}
+                                style={{ paddingHorizontal: 4 }}
+                            >
+                                <MaterialCommunityIcons name="script-text-outline" size={20} color="#1F2937" />
+                            </TouchableOpacity>
 
-                        {/* RIGHT: Super Pill (Avatar + Stats) */}
-                        <TouchableOpacity
-                            onPress={() => { setProfileVisible(true); setGrimoireVisible(false); }}
-                            style={styles.superPill}
-                            activeOpacity={0.9}
-                        >
-                            {/* Avatar (Gear) */}
-                            <View style={[styles.superPillAvatarContainer, { justifyContent: 'center', alignItems: 'center', backgroundColor: '#EEE' }]}>
-                                <MaterialCommunityIcons name="cog" size={24} color="#1F2937" />
+                            {/* Divider */}
+                            <View style={{ width: 1, height: 16, backgroundColor: '#E5E7EB', marginHorizontal: 8 }} />
+
+                            {/* 2. Team Widget (Center) */}
+                            {hasTeam && (
+                                <>
+                                    <View style={styles.miniAvatarRow}>
+                                        <View style={[styles.miniAvatarCircle, userDone ? styles.avatarDone : styles.avatarNotReady]}>
+                                            <MaterialCommunityIcons name="account" size={16} color={userDone ? "#059669" : "#9CA3AF"} />
+                                        </View>
+                                        <View style={[styles.miniConnector, { backgroundColor: (userDone && partnerDone) ? '#10B981' : '#E5E7EB' }]} />
+                                        <TouchableOpacity
+                                            onPress={handleNudge}
+                                            activeOpacity={0.7}
+                                            style={[styles.miniAvatarCircle, partnerDone ? styles.avatarDone : styles.avatarNotReady]}
+                                        >
+                                            <MaterialCommunityIcons
+                                                name={partnerDone ? "check" : "bell-ring"}
+                                                size={partnerDone ? 16 : 14}
+                                                color={partnerDone ? "#059669" : (status === 'SAFE' ? '#9CA3AF' : '#F97316')}
+                                            />
+                                        </TouchableOpacity>
+                                    </View>
+                                    {/* Divider */}
+                                    <View style={{ width: 1, height: 16, backgroundColor: '#E5E7EB', marginHorizontal: 8 }} />
+                                </>
+                            )}
+
+                            {/* 3. Stats */}
+                            <View style={{ flexDirection: 'row', gap: 10, alignItems: 'center' }}>
+                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                                    <MaterialCommunityIcons name="heart" size={14} color="#EF4444" />
+                                    <Text style={{ fontSize: 12, fontWeight: '800', color: '#1F2937' }}>{hearts}</Text>
+                                </View>
+                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                                    <MaterialCommunityIcons name="fire" size={14} color="#F97316" />
+                                    <Text style={{ fontSize: 12, fontWeight: '800', color: '#1F2937' }}>{streak}</Text>
+                                </View>
+                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                                    <MaterialCommunityIcons name="snowflake" size={14} color="#3B82F6" />
+                                    <Text style={{ fontSize: 12, fontWeight: '800', color: '#1F2937' }}>{freezes}</Text>
+                                </View>
                             </View>
 
-                            {/* Stats */}
-                            <View style={styles.superPillStatsRow}>
-                                <View style={styles.superPillStatItem}>
-                                    <MaterialCommunityIcons name="heart" size={16} color="#EF4444" />
-                                    <Text style={styles.superPillStatText}>{hearts}</Text>
-                                </View>
-                                <View style={styles.superPillStatItem}>
-                                    <MaterialCommunityIcons name="fire" size={16} color="#F97316" />
-                                    <Text style={styles.superPillStatText}>{streak}</Text>
-                                </View>
-                                <View style={styles.superPillStatItem}>
-                                    <MaterialCommunityIcons name="snowflake" size={16} color="#3B82F6" />
-                                    <Text style={styles.superPillStatText}>{freezes}</Text>
-                                </View>
-                            </View>
-                        </TouchableOpacity>
+                            {/* Divider */}
+                            <View style={{ width: 1, height: 16, backgroundColor: '#E5E7EB', marginHorizontal: 8 }} />
+
+                            {/* 4. Settings (Right) */}
+                            <TouchableOpacity
+                                onPress={() => { setProfileVisible(true); setGrimoireVisible(false); }}
+                                activeOpacity={0.7}
+                                style={{ paddingHorizontal: 4 }}
+                            >
+                                <MaterialCommunityIcons name="cog" size={20} color="#1F2937" />
+                            </TouchableOpacity>
+                        </View>
                     </View>
                 </View>
+
+                {/* TEAM AVATARS ROW (Moved to Top) */}
 
                 {/* LAYER 2: DRAWER (Foreground) */}
                 <GestureDetector gesture={gesture}>
                     <Animated.View style={[styles.drawerSheet, rSheetStyle]}>
+
+
+
                         <ChallengeDrawer
                             challengeData={challengeData}
                             onComplete={handleComplete}
@@ -352,7 +314,6 @@ export default function DashboardScreen() {
                     code={teamCode}
                     onDebug={() => setDebugVisible(true)}
                     onReplayTutorial={() => setTutorialVisible(true)}
-                    session={session}
                 />
 
                 <DebugMenu
@@ -360,8 +321,7 @@ export default function DashboardScreen() {
                     onClose={() => setDebugVisible(false)}
                     onReset={async () => {
                         await AsyncStorage.clear();
-                        await supabase.auth.signOut();
-                        router.replace('/');
+                        await signOut();
                     }}
                     token=""
                 />
@@ -381,7 +341,7 @@ export default function DashboardScreen() {
                 />
 
             </ImageBackground >
-        </GestureHandlerRootView>
+        </GestureHandlerRootView >
     );
 }
 
@@ -425,42 +385,14 @@ const styles = StyleSheet.create({
         paddingBottom: 2,
         width: '100%',
     },
-    statsRow: {
-        flexDirection: 'row',
-        gap: 24,
-        width: '100%',
-        justifyContent: 'center',
-        alignItems: 'center'
-    },
-    statPill: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        marginHorizontal: 15,
-    },
-    statText: {
-        fontSize: 16,
-        fontWeight: 'bold',
-        color: '#FFFFFF',
-        textShadowColor: 'rgba(0, 0, 0, 0.3)',
-        textShadowOffset: { width: 0, height: 1 },
-        textShadowRadius: 3,
-        marginLeft: 4
-    },
-    ghostButton: {
-        width: 48,
-        height: 48,
-        justifyContent: 'center',
-        alignItems: 'center',
-        backgroundColor: 'transparent',
-    },
-    superPill: {
+    // REMOVED unused superPill and large avatar styles
+    megaPill: {
         flexDirection: 'row',
         alignItems: 'center',
         backgroundColor: 'rgba(255,255,255,0.95)',
         borderRadius: 30,
-        paddingLeft: 4, // Space for avatar
-        paddingRight: 16, // Space on right
-        paddingVertical: 4,
+        paddingHorizontal: 16,
+        paddingVertical: 8,
         shadowColor: "#000",
         shadowOffset: { width: 0, height: 2 },
         shadowOpacity: 0.1,
@@ -468,57 +400,25 @@ const styles = StyleSheet.create({
         elevation: 3,
         height: 52
     },
-    superPillAvatarContainer: {
-        width: 44,
-        height: 44,
-        borderRadius: 22,
-        borderWidth: 2,
-        borderColor: '#FFFFFF',
-        overflow: 'hidden',
-        marginRight: 12
-    },
-    superPillAvatarImage: {
-        width: '100%',
-        height: '100%'
-    },
-    superPillStatsRow: {
+    // MINI WIDGET STYLES
+    miniAvatarRow: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 12
+        gap: 6
     },
-    superPillStatItem: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 4
-    },
-    superPillStatText: {
-        fontSize: 14,
-        fontWeight: '800',
-        color: '#1F2937'
-    },
-    teamStatusContainer: {
-        width: '100%',
-        alignItems: 'center',
-        marginTop: 10
-    },
-    avatarRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 15
-    },
-    connectorLine: {
-        width: 40,
-        height: 4,
-        borderRadius: 2
-    },
-    avatarCircle: {
-        width: 40,
-        height: 40,
-        borderRadius: 20,
+    miniAvatarCircle: {
+        width: 32,
+        height: 32,
+        borderRadius: 16,
         justifyContent: 'center',
         alignItems: 'center',
         borderWidth: 2,
-        backgroundColor: '#F3F4F6'
+        backgroundColor: 'rgba(255,255,255,0.8)'
+    },
+    miniConnector: {
+        width: 16,
+        height: 3,
+        borderRadius: 1.5
     },
     avatarDone: {
         borderColor: '#10B981',

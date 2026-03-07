@@ -1,22 +1,27 @@
 import React from 'react';
 import { View, Text, StyleSheet, Modal, TouchableOpacity } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { supabase } from '../../lib/supabase';
-
 import DuoButton from './DuoButton';
+import { useAuthActions } from "@convex-dev/auth/react";
+import { useQuery } from "convex/react";
+import { api } from "../../convex/_generated/api";
 
 interface ProfileModalProps {
     visible: boolean;
     onClose: () => void;
-    session?: any; // Made optional
     code: string;
     onReplayTutorial: () => void;
-    onDebug?: () => void; // New
+    onDebug?: () => void;
 }
 
-export default function ProfileModal({ visible, onClose, session, code, onReplayTutorial, onDebug }: ProfileModalProps) {
+export default function ProfileModal({ visible, onClose, code, onReplayTutorial, onDebug }: ProfileModalProps) {
+    const { signOut } = useAuthActions();
+    const user = useQuery(api.users.current);
+
+    const email = user?.email || "User";
+
     const handleSignOut = async () => {
-        await supabase.auth.signOut();
+        await signOut();
         onClose();
     };
 
@@ -40,7 +45,7 @@ export default function ProfileModal({ visible, onClose, session, code, onReplay
                         <View style={styles.avatar}>
                             <MaterialCommunityIcons name="account" size={40} color="white" />
                         </View>
-                        <Text style={styles.email}>{session?.user?.email}</Text>
+                        <Text style={styles.email}>{email}</Text>
 
                         <View style={styles.codeContainer}>
                             <Text style={styles.codeLabel}>TEAM CODE</Text>

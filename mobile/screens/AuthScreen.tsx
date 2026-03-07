@@ -1,81 +1,38 @@
 import React, { useState } from 'react';
 import { View, Text, TextInput, StyleSheet, Alert, Image, TouchableOpacity } from 'react-native';
-import { supabase } from '../lib/supabase';
+import { useAuthActions } from "@convex-dev/auth/react";
 import DuoButton from '../components/ui/DuoButton';
 import Container from '@/components/ui/Container';
 
 export default function AuthScreen() {
+    const { signIn } = useAuthActions();
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [loading, setLoading] = useState(false);
     const [isLogin, setIsLogin] = useState(true);
 
-    // Helper to translate technical errors to friendly messages
-    function getErrorMessage(error: any) {
-        const msg = error.message || "Unknown error";
-        if (msg.includes("Invalid login credentials")) return "Incorrect email or password.";
-        if (msg.includes("already registered")) return "This email is already in use. Try logging in.";
-        if (msg.includes("password should be")) return "Password is too weak. content length must be at least 6 characters.";
-        if (msg.includes("invalid_grant")) return "Invalid login details.";
-        return msg;
-    }
-
-    // Helper for validation
-    function validateInputs() {
-        if (!email.trim() || !password.trim()) {
-            Alert.alert("Missing Info", "Please enter both email and password.");
-            return false;
-        }
-        return true;
-    }
-
     async function handleAuth() {
-        if (!validateInputs()) return;
-        setLoading(true);
-
-        if (isLogin) {
-            // LOGIN
-            const { error } = await supabase.auth.signInWithPassword({
-                email: email,
-                password: password,
-            });
-            if (error) Alert.alert("Login Failed", getErrorMessage(error));
-        } else {
-            // SIGN UP FLOW
-            // 1. Try to Log In first (in case they essentially deleted data but are still in Auth system)
-            console.log("🔹 Attempting check for existing user...");
-            const { data: loginData, error: loginError } = await supabase.auth.signInWithPassword({
-                email: email,
-                password: password,
-            });
-
-            if (loginData.session) {
-                console.log("✅ User exists! Auto-logging in...");
-                Alert.alert("Welcome Back!", "You already had an account, so we logged you in.");
-                return; // Stop here, session listener will handle redirect
-            }
-
-            // 2. If Login failed, proceed with actual Sign Up
-            console.log("🔹 Creating new user...");
-            const { data, error } = await supabase.auth.signUp({
-                email: email,
-                password: password,
-                options: { emailRedirectTo: 'zippyfit://auth-callback' }
-            });
-
-            if (error) {
-                // Hide "User already registered" error if possible, but usually handled by login check above
-                Alert.alert("Signup Failed", getErrorMessage(error));
-            } else if (data.session) {
-                console.log("✅ Signup returned session (Immediate Verify).");
-                Alert.alert("Welcome!", "Account created and verified.");
-            } else {
-                console.log("⏳ Verification Email Sent.");
-                Alert.alert("Check your inbox!", "We sent you a verification link.");
-                setIsLogin(true);
-            }
+        if (!email.trim() || !password.trim()) {
+            Alert.alert("Error", "Please enter both email and password.");
+            return;
         }
-        setLoading(false);
+        setLoading(true);
+        try {
+            const flow = isLogin ? "signIn" : "signUp";
+            await signIn("password", { email, password, flow });
+            // For email verification flow, we might need to handle the step parameter
+            // But for simple password auth (if configured dev mode or without verification), it might just log in.
+        } catch (error: any) {
+            let errorMsg = error.message || "Unknown error";
+            if (errorMsg.includes("InvalidSecret")) {
+                errorMsg = "Incorrect password.";
+            } else if (errorMsg.includes("InvalidAccountId")) {
+                errorMsg = "Account not found.";
+            }
+            Alert.alert("Authentication Failed", errorMsg);
+        } finally {
+            setLoading(false);
+        }
     }
 
     return (

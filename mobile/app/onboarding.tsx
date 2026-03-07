@@ -1,6 +1,6 @@
 import React from 'react';
-import OnboardingScreen from '../screens/OnboardingScreen';
+import TutorialScreen from '../screens/TutorialScreen';
 
 export default function OnboardingRoute() {
-    return <OnboardingScreen />;
+    return <TutorialScreen />;
 }

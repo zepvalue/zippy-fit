@@ -2,43 +2,31 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, Modal, TouchableOpacity, ScrollView, Dimensions } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { BlurView } from 'expo-blur';
-import { api } from '../../lib/api';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { api } from '../../convex/_generated/api';
+import { useQuery } from 'convex/react';
 
 interface GrimoireModalProps {
     visible: boolean;
     onClose: () => void;
 }
 
-interface Fact {
-    id: number;
-    title: string;
-    text: string;
-    status: 'locked' | 'unlocked';
-    unlocked_at?: string;
-}
-
-const { width } = Dimensions.get('window');
-
 export default function GrimoireModal({ visible, onClose }: GrimoireModalProps) {
-    const [facts, setFacts] = useState<Fact[]>([]);
-    const [loading, setLoading] = useState(false);
+    // Convex Query - Reactive
+    // We only want to fetch if visible? 
+    // Actually, useQuery is smart. We can just use it. 
+    // Using "skip" argument if supported? Convex queries are efficient. 
+    // But to avoid fetching when not needed:
+    // const facts = useQuery(api.grimoire.get) || [];
+    // Ideally we skip if not visible?
+    // Convex doesn't have a 'skip' option in the hook directly like Apollo, 
+    // but we can pass 'skip' typed args if we handle it in query? 
+    // No, standard `useQuery` runs if args are passed.
+    // Let's just fetch it. It's light.
+    const facts = useQuery(api.grimoire.get) || [];
+    const loading = facts === undefined;
 
-    useEffect(() => {
-        if (visible) {
-            loadGrimoire();
-        }
-    }, [visible]);
+    // Remove loadGrimoire and useEffect
 
-    const loadGrimoire = async () => {
-        setLoading(true);
-        const token = await AsyncStorage.getItem('userToken');
-        if (token) {
-            const data = await api.getGrimoire(token);
-            setFacts(data);
-        }
-        setLoading(false);
-    };
 
     if (!visible) return null;
 
@@ -77,9 +65,9 @@ export default function GrimoireModal({ visible, onClose }: GrimoireModalProps) 
                                         <Text style={styles.cardBody}>{fact.text}</Text>
                                     )}
 
-                                    {fact.status === 'unlocked' && fact.unlocked_at && (
+                                    {fact.status === 'unlocked' && (fact as any).unlocked_at && (
                                         <Text style={styles.dateText}>
-                                            Unlocked {new Date(fact.unlocked_at).toLocaleDateString()}
+                                            Unlocked {new Date((fact as any).unlocked_at).toLocaleDateString()}
                                         </Text>
                                     )}
                                 </View>

@@ -208,16 +208,18 @@ export default function ChallengeOfTheDay({ challengeText, onComplete, isComplet
                         style={StyleSheet.absoluteFill}
                     />
 
-                    {/* Active Fill Track (Grey when done, otherwise transparent over gradient) */}
-                    {isCompleted && (
-                        <View style={[styles.sliderFill, { width: '100%', backgroundColor: '#E5E7EB', zIndex: 11 }]} />
-                    )}
-
                     {/* Text Underneath Slider (Hint) */}
                     {!sliderActive && !isCompleted && (
                         <View style={styles.sliderHintContainer}>
                             <Text style={styles.sliderHintText}>SLIDE TO COMPLETE</Text>
                             <MaterialCommunityIcons name="chevron-double-right" size={20} color="white" style={{ opacity: 0.8 }} />
+                        </View>
+                    )}
+
+                    {/* Text When COMPLETED */}
+                    {isCompleted && (
+                        <View style={[styles.sliderHintContainer, { paddingLeft: 0 }]}>
+                            <Text style={styles.sliderHintText}>COMPLETED!</Text>
                         </View>
                     )}
 
@@ -227,7 +229,7 @@ export default function ChallengeOfTheDay({ challengeText, onComplete, isComplet
                             styles.sliderThumb,
                             {
                                 transform: [{ translateX: pan.x }],
-                                backgroundColor: isCompleted ? '#9CA3AF' : 'white'
+                                backgroundColor: 'white'
                             }
                         ]}
                         hitSlop={{ top: 30, bottom: 30, left: 30, right: 50 }}
@@ -236,7 +238,7 @@ export default function ChallengeOfTheDay({ challengeText, onComplete, isComplet
                         <MaterialCommunityIcons
                             name={isCompleted ? "check" : "trophy"}
                             size={24}
-                            color={isCompleted ? "white" : mainColor}
+                            color={isCompleted ? "#16A34A" : mainColor}
                         />
                     </RNAnimated.View>
                 </View>
@@ -422,6 +424,7 @@ const styles = StyleSheet.create({
         color: '#FFFFFF', // White text on Green Gradient
         fontWeight: '900',
         fontSize: 14,
+        paddingLeft: 20,
         letterSpacing: 1,
         textShadowColor: 'rgba(0,0,0,0.1)',
         textShadowOffset: { width: 0, height: 1 },

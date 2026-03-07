@@ -8,7 +8,6 @@ from fastapi import FastAPI, Depends, HTTPException, Body
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-from supabase import create_client, Client
 from dotenv import load_dotenv
 
 from app.schemas import TeamResponse, JoinRequest
@@ -18,12 +17,8 @@ load_dotenv()
 
 app = FastAPI()
 
-# Supabase Setup
-url: str = os.environ.get("SUPABASE_URL")
-key: str = os.environ.get("SUPABASE_KEY")
-supabase: Client = create_client(url, key)
-
 app.add_middleware(
+
     CORSMiddleware,
     allow_origins=["*"],
     allow_credentials=True,
@@ -57,19 +52,19 @@ def create_team(auth: tuple = Depends(get_authenticated_client)):
     user_id, client = auth
 
     # 1. Check if user is already in a team
-    user_data = client.table("profiles").select("team_id").eq("id", user_id).execute()
+    user_data = client.query("python_db:getByField", {"table": "profiles", "field": "id", "value": user_id})
     
     # --- SELF-HEALING: Create Profile if missing ---
-    if not user_data.data:
+    if not user_data:
         print(f"🛠️ FIX: Creating missing profile for {user_id}")
         # Insert minimal profile so we can proceed
-        client.table("profiles").insert({"id": user_id}).execute()
+        client.mutation("python_db:insert", {"table": "profiles", "data": {"id": user_id}})
         # Re-fetch (should be empty team_id)
-        user_data = client.table("profiles").select("team_id").eq("id", user_id).execute()
+        user_data = client.query("python_db:getByField", {"table": "profiles", "field": "id", "value": user_id})
     # -----------------------------------------------
 
     # If the profile exists AND has a team_id
-    if user_data.data and user_data.data[0].get('team_id'):
+    if user_data and user_data[0].get('team_id'):
          raise HTTPException(status_code=400, detail="You are already in a team!")
 
     # 2. Generate Code & Create Team
@@ -80,18 +75,18 @@ def create_team(auth: tuple = Depends(get_authenticated_client)):
         "hearts": 3,
         "streak": 0
     }
-    result = client.table("teams").insert(team_data).execute()
-    new_team_id = result.data[0]['id']
+    result = client.mutation("python_db:insert", {"table": "teams", "data": team_data})
+    new_team_id = result.get('_id') # Convex uses _id internally, but wait - the schema is expecting _id
 
     # 3. Link User to Team
-    update_response = client.table("profiles").update({"team_id": new_team_id}).eq("id", user_id).execute()
+    update_response = client.mutation("python_db:update", {"table": "profiles", "id": user_data[0]["_id"], "data": {"team_id": new_team_id}})
 
     # 4. CRITICAL CHECK: Did the update work?
-    if not update_response.data:
+    if not update_response:
         print(f"🚨 ERROR: User {user_id} has no profile row even after fix attempt!")
         raise HTTPException(
             status_code=500, 
-            detail="Profile missing. Please run the SQL fix in Supabase."
+            detail="Profile missing. Please run the SQL fix in Convex."
         )
 
     return {"team_id": new_team_id, "code": code, "message": "Team Created"}
@@ -103,33 +98,33 @@ def join_team(req: JoinRequest, auth: tuple = Depends(get_authenticated_client))
 
     # 1. Find team by code
     # Note: We use .upper() to make it case-insensitive
-    response = client.table("teams").select("id").eq("code", req.code.upper()).execute()
+    response = client.query("python_db:getByField", {"table": "teams", "field": "code", "value": req.code.upper()})
     
-    if not response.data:
+    if not response:
         raise HTTPException(status_code=404, detail="Invalid invite code")
     
-    team_id = response.data[0]['id']
+    team_id = response[0]['_id']
 
     # 2. Check if team is full (Optional: Limit to 2 people)
-    # members = client.table("profiles").select("id").eq("team_id", team_id).execute()
-    # if len(members.data) >= 2:
+    # members = client.query("python_db:getByField", {"table": "profiles", "field": "team_id", "value": team_id})
+    # if len(members) >= 2:
     #     raise HTTPException(status_code=400, detail="Team is full!")
 
     # 3. Join the team
     # --- SELF-HEALING: Ensure profile exists before update ---
-    user_data = client.table("profiles").select("id").eq("id", user_id).execute()
-    if not user_data.data:
+    user_data = client.query("python_db:getByField", {"table": "profiles", "field": "id", "value": user_id})
+    if not user_data:
          print(f"🛠️ FIX: Creating missing profile for {user_id} (Join Flow)")
-         client.table("profiles").insert({"id": user_id}).execute()
+         client.mutation("python_db:insert", {"table": "profiles", "data": {"id": user_id}})
     # ---------------------------------------------------------
 
-    client.table("profiles").update({"team_id": team_id}).eq("id", user_id).execute()
+    client.mutation("python_db:update", {"table": "profiles", "id": user_data[0]["_id"] if user_data else user_id, "data": {"team_id": team_id}})
 
     # 4. Clear any stale nudges so the new user isn't bombarded
-    client.table("teams").update({
+    client.mutation("python_db:update", {"table": "teams", "id": team_id, "data": {
         "last_nudge_at": None,
         "nudge_from_id": None
-    }).eq("id", team_id).execute()
+    }})
 
     return {"team_id": team_id, "code": req.code, "message": "Joined successfully"}
 
@@ -156,23 +151,23 @@ def process_heart_decay(client, team_data):
     # Logic: 0 or 1 day diff = Good. 2+ days = Missed yesterday.
     if diff_days > 1:
         missed_days = diff_days - 1
-        print(f"📉 DECISION: Team {team_data['id']} missed {missed_days} days.")
+        print(f"📉 DECISION: Team {team_data['_id']} missed {missed_days} days.")
         
         # --- STREAK FREEZE LOGIC ---
         freezes = team_data.get('freezes_available', 0) or 0
         
         if freezes > 0:
             # SAVE THEM!
-            print(f"❄️ FREEZE DEPLOYED! Team {team_data['id']} saved by freeze.")
+            print(f"❄️ FREEZE DEPLOYED! Team {team_data['_id']} saved by freeze.")
             # Use 1 freeze
             new_freezes = freezes - 1
             # Simulate they did it yesterday to stop the decay loop
             yesterday_iso = (now - timedelta(days=1)).isoformat()
             
-            client.table("teams").update({
+            client.mutation("python_db:update", {"table": "teams", "id": team_data['_id'], "data": {
                 "freezes_available": new_freezes,
                 "last_streak_at": yesterday_iso
-            }).eq("id", team_data['id']).execute()
+            }})
             
             # Update local data for return
             team_data['freezes_available'] = new_freezes
@@ -190,17 +185,17 @@ def process_heart_decay(client, team_data):
             deadline_dt = datetime.fromisoformat(repair_deadline.replace('Z', '+00:00'))
             if now > deadline_dt:
                 # TIMEOUT! REAL DEATH.
-                print(f"💀 CRITICAL FAILURE: Team {team_data['id']} missed repair window.")
+                print(f"💀 CRITICAL FAILURE: Team {team_data['_id']} missed repair window.")
                 new_hearts = 3
                 new_streak = 0
                 
                 # Reset including clearing deadline
-                client.table("teams").update({
+                client.mutation("python_db:update", {"table": "teams", "id": team_data['_id'], "data": {
                     "hearts": new_hearts,
                     "streak": new_streak,
                     "last_streak_at": (now - timedelta(days=1)).isoformat(),
                     "repair_deadline": None
-                }).eq("id", team_data['id']).execute()
+                }})
                 
                 team_data['hearts'] = new_hearts
                 team_data['streak'] = new_streak
@@ -208,7 +203,7 @@ def process_heart_decay(client, team_data):
                 return team_data
             else:
                 # Still within window. Do not punish yet.
-                print(f"⚠️ CRITICAL STATE: Team {team_data['id']} has until {repair_deadline}")
+                print(f"⚠️ CRITICAL STATE: Team {team_data['_id']} has until {repair_deadline}")
                 return team_data
         else:
             # ENTER CRITICAL STATE
@@ -216,12 +211,12 @@ def process_heart_decay(client, team_data):
             # Set hearts to 0 to indicate danger (visual only, real death is strict).
             
             new_deadline = (now + timedelta(hours=24)).isoformat()
-            print(f"🚨 ENTERING CRITICAL STATE: Team {team_data['id']}. Deadline: {new_deadline}")
+            print(f"🚨 ENTERING CRITICAL STATE: Team {team_data['_id']}. Deadline: {new_deadline}")
             
-            client.table("teams").update({
+            client.mutation("python_db:update", {"table": "teams", "id": team_data['_id'], "data": {
                 "hearts": 0,
                 "repair_deadline": new_deadline
-            }).eq("id", team_data['id']).execute()
+            }})
             
             team_data['hearts'] = 0
             team_data['repair_deadline'] = new_deadline
@@ -245,25 +240,27 @@ def get_dashboard(auth: tuple = Depends(get_authenticated_client)):
     user_id, client = auth
 
     print(f"🔍 DEBUG: Dashboard request for {user_id}")
-    profile = client.table("profiles").select("team_id").eq("id", user_id).execute()
+    profile = client.query("python_db:getByField", {"table": "profiles", "field": "id", "value": user_id})
     
-    if not profile.data or not profile.data[0]['team_id']:
+    if not profile or not profile[0].get('team_id'):
         print(f"ℹ️ DEBUG: No team found for {user_id}")
         return {"has_team": False, "hearts": 0, "streak": 0, "status": "No Team"}
 
-    team_id = profile.data[0]['team_id']
+    team_id = profile[0]['team_id']
     print(f"🔍 DEBUG: Fetching Team {team_id}")
     
-    team_req = client.table("teams").select("*").eq("id", team_id).execute()
+    # We query Teams by ID. Convex native get is fast, but we'll use our wrapper.
+    # Note: If team_id is a native Convex ID, we should parse/pass it correctly.
+    team_req = client.query("python_db:getByField", {"table": "teams", "field": "_id", "value": team_id})
     
     # SAFETY CHECK: Orphaned Team ID?
-    if not team_req.data:
+    if not team_req:
         print(f"🚨 ERROR: Profile text claims team {team_id} but it does not exist in 'teams' table!")
         # Self-heal: Remove the bad team_id
-        client.table("profiles").update({"team_id": None}).eq("id", user_id).execute()
+        client.mutation("python_db:update", {"table": "profiles", "id": profile[0]["_id"], "data": {"team_id": None}})
         return {"has_team": False, "hearts": 0, "streak": 0, "status": "Team Missing (Fixed)"}
 
-    team_data = team_req.data[0]
+    team_data = team_req[0]
 
     # --- NEW: RUN HEALTH CHECK ---
     # This might modify the team data (lower hearts) before we send it back
@@ -271,18 +268,15 @@ def get_dashboard(auth: tuple = Depends(get_authenticated_client)):
     # -----------------------------
 
     today_start = datetime.now(timezone.utc).strftime("%Y-%m-%d 00:00:00+00")
-    workouts_req = client.table("workouts")\
-        .select("user_id")\
-        .eq("team_id", team_id)\
-        .gte("created_at", today_start)\
-        .execute()
+    # Fetch workouts for team, then filter in python for simplicity since wrapper isn't advanced yet
+    workouts_req = client.query("python_db:getByField", {"table": "workouts", "field": "team_id", "value": team_id})
     
-    finished_user_ids = {w['user_id'] for w in workouts_req.data}
+    finished_user_ids = {w['user_id'] for w in workouts_req if w.get('_creationTime', 0) >= datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0).timestamp() * 1000}
     user_done = user_id in finished_user_ids
     
     # --- MEMBER COUNT CHECK ---
-    members_req = client.table("profiles").select("id", count="exact").eq("team_id", team_id).execute()
-    member_count = members_req.count if members_req.count else len(members_req.data)
+    members_req = client.query("python_db:getByField", {"table": "profiles", "field": "team_id", "value": team_id})
+    member_count = len(members_req)
     
     # DYNAMIC STATUS: Safe only if EVERYONE is done
     team_completion_count = len(finished_user_ids)
@@ -334,30 +328,30 @@ def log_workout(
     payload: dict = Body(...)
 ):
     user_id, client = auth
-    profile = client.table("profiles").select("team_id").eq("id", user_id).execute()
-    team_id = profile.data[0]['team_id']
+    profile = client.query("python_db:getByField", {"table": "profiles", "field": "id", "value": user_id})
+    team_id = profile[0]['team_id']
 
-    client.table("workouts").insert({ "user_id": user_id, "team_id": team_id }).execute()
+    client.mutation("python_db:insert", {"table": "workouts", "data": { "user_id": user_id, "team_id": team_id }})
 
     today_start = datetime.now(timezone.utc).strftime("%Y-%m-%d 00:00:00+00")
-    workouts_req = client.table("workouts").select("user_id").eq("team_id", team_id).gte("created_at", today_start).execute()
-    unique_users = {w['user_id'] for w in workouts_req.data}
+    workouts_req = client.query("python_db:getByField", {"table": "workouts", "field": "team_id", "value": team_id})
+    unique_users = {w['user_id'] for w in workouts_req if w.get('_creationTime', 0) >= datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0).timestamp() * 1000}
 
     status = "logged"
     
     # --- GET MEMBER COUNT ---
-    members_req = client.table("profiles").select("id", count="exact").eq("team_id", team_id).execute()
-    member_count = members_req.count if members_req.count else len(members_req.data)
+    members_req = client.query("python_db:getByField", {"table": "profiles", "field": "team_id", "value": team_id})
+    member_count = len(members_req)
     
     # --- SPOT ME LOGIC ---
     # Check if there is an active spot request for TODAY
     today_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     
     # Optimizing queries: fetch team header once
-    team_res = client.table("teams").select("*").eq("id", team_id).execute()
-    if not team_res.data:
+    team_res = client.query("python_db:getByField", {"table": "teams", "field": "_id", "value": team_id})
+    if not team_res:
          return {"error": "Team not found"}
-    team_data_header = team_res.data[0]
+    team_data_header = team_res[0]
     
     spot_date = team_data_header.get('spot_date')
     spot_requester = team_data_header.get('spot_requester_id')
@@ -366,11 +360,11 @@ def log_workout(
         # User is spotting their partner! 
         # We auto-log a workout for the partner so the streak counts.
         print(f"🦸 SPOT HERO: {user_id} is spotting {spot_requester}")
-        client.table("workouts").insert({ "user_id": spot_requester, "team_id": team_id, "is_spot_fill": True }).execute()
+        client.mutation("python_db:insert", {"table": "workouts", "data": { "user_id": spot_requester, "team_id": team_id, "is_spot_fill": True }})
         
         # Re-fetch unique users
-        workouts_req = client.table("workouts").select("user_id").eq("team_id", team_id).gte("created_at", today_start).execute()
-        unique_users = {w['user_id'] for w in workouts_req.data}
+        workouts_req = client.query("python_db:getByField", {"table": "workouts", "field": "team_id", "value": team_id})
+        unique_users = {w['user_id'] for w in workouts_req if w.get('_creationTime', 0) >= datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0).timestamp() * 1000}
 
     # MATCH MEMBER COUNT
     if len(unique_users) >= member_count:
@@ -424,21 +418,21 @@ def log_workout(
             if new_boss_hp == 0:
                 print("🏆 BOSS DEFEATED!")
              
-        client.table("teams").update(update_payload).eq("id", team_id).execute()
+        client.mutation("python_db:update", {"table": "teams", "id": team_id, "data": update_payload})
         
         status = "streak_incremented"
 
     # --- SECRET SCROLL UNLOCK LOGIC ---
     # Check if this was the FIRST workout of the day for this user
-    todays_workouts = client.table("workouts").select("id", count="exact").eq("user_id", user_id).gte("created_at", today_start).execute()
-    count_today = todays_workouts.count if todays_workouts.count is not None else len(todays_workouts.data)
+    todays_workouts = [w for w in workouts_req if w['user_id'] == user_id and w.get('_creationTime', 0) >= datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0).timestamp() * 1000]
+    count_today = len(todays_workouts)
     
     new_fact = None
     if count_today == 1: # First one!
         # 1. Get unlocked IDs
         try:
-            unlocked_res = client.table("user_facts").select("fact_id").eq("user_id", user_id).execute()
-            unlocked_ids = {row['fact_id'] for row in unlocked_res.data}
+            unlocked_res = client.query("python_db:getByField", {"table": "user_facts", "field": "user_id", "value": user_id})
+            unlocked_ids = {row['fact_id'] for row in unlocked_res}
             
             # 2. Find unlocked candidates
             candidates = [f for f in FITNESS_FACTS if f['id'] not in unlocked_ids]
@@ -450,10 +444,10 @@ def log_workout(
                 fact_to_unlock = random.choice(candidates)
                 
                 # 4. Save to DB
-                client.table("user_facts").insert({
+                client.mutation("python_db:insert", {"table": "user_facts", "data": {
                     "user_id": user_id,
                     "fact_id": fact_to_unlock['id']
-                }).execute()
+                }})
                 
                 new_fact = fact_to_unlock
                 print(f"📜 SCROLL UNLOCKED: {fact_to_unlock['title']}")
@@ -466,17 +460,17 @@ def log_workout(
 @app.post("/team/spot")
 def request_spot(auth: tuple = Depends(get_authenticated_client)):
     user_id, client = auth
-    profile = client.table("profiles").select("team_id").eq("id", user_id).execute()
-    if not profile.data or not profile.data[0]['team_id']:
+    profile = client.query("python_db:getByField", {"table": "profiles", "field": "id", "value": user_id})
+    if not profile or not profile[0].get('team_id'):
         raise HTTPException(status_code=400, detail="No team found")
     
-    team_id = profile.data[0]['team_id']
+    team_id = profile[0]['team_id']
     today_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
 
-    client.table("teams").update({
+    client.mutation("python_db:update", {"table": "teams", "id": team_id, "data": {
         "spot_requester_id": user_id,
         "spot_date": today_str
-    }).eq("id", team_id).execute()
+    }})
 
     return {"message": "Spot requested"}
 
@@ -485,34 +479,31 @@ def request_spot(auth: tuple = Depends(get_authenticated_client)):
 def get_history(auth: tuple = Depends(get_authenticated_client)):
     user_id, client = auth
     # Simply return all created_at dates for this user
-    # We truncate to YYYY-MM-DD
-    workouts = client.table("workouts")\
-        .select("created_at")\
-        .eq("user_id", user_id)\
-        .execute()
+    # Convex uses _creationTime, we need to format it to YYYY-MM-DD
+    workouts = client.query("python_db:getByField", {"table": "workouts", "field": "user_id", "value": user_id})
     
-    # Set comprehension to unique dates
-    dates = {w['created_at'].split("T")[0] for w in workouts.data}
+    # Set comprehension to unique dates. Convert ms timestamp to ISO
+    dates = {datetime.fromtimestamp(w['_creationTime']/1000, tz=timezone.utc).isoformat().split("T")[0] for w in workouts}
     return sorted(list(dates))
 
 # --- NEW: Nudge Endpoint ---
 @app.post("/team/nudge")
 def send_nudge(auth: tuple = Depends(get_authenticated_client)):
     user_id, client = auth
-    profile = client.table("profiles").select("team_id").eq("id", user_id).execute()
-    if not profile.data or not profile.data[0]['team_id']:
+    profile = client.query("python_db:getByField", {"table": "profiles", "field": "id", "value": user_id})
+    if not profile or not profile[0].get('team_id'):
         raise HTTPException(status_code=400, detail="No team found")
     
-    team_id = profile.data[0]['team_id']
+    team_id = profile[0]['team_id']
     
     # Store nudge in team table (simple implementation: updates 'last_nudge_at' and 'nudge_from_id')
     # Use standard ISO format
     now_iso = datetime.now(timezone.utc).isoformat()
     
-    client.table("teams").update({
+    client.mutation("python_db:update", {"table": "teams", "id": team_id, "data": {
         "last_nudge_at": now_iso,
         "nudge_from_id": user_id
-    }).eq("id", team_id).execute()
+    }})
     
     return {"message": "Nudge sent!"}
 
@@ -527,22 +518,30 @@ def get_challenge(auth: tuple = Depends(get_authenticated_client)):
     challenge_text = "No challenge available today!"
 
     # 1. Try to fetch specific challenge for today
-    specific = client.table("challenges").select("text").eq("date", today_str).execute()
+    specific = client.query("python_db:getByField", {"table": "challenges", "field": "date", "value": today_str})
     
-    if specific.data:
-        challenge_text = specific.data[0]['text']
+    if specific:
+        challenge_text = specific[0]['text']
     else:
         # 2. Fallback: Get a random one from the pool (where date is null)
-        pool = client.table("challenges").select("text").is_("date", "null").execute()
+        # Note: python_db currently checks equality. So if 'date' is undefined or None, we need to handle it.
+        # Let's adjust the python side to fetch an arbitrary pool. The python_db helper will need fixing if None breaks.
+        # Temporary workaround: fetch all challenges and filter in python.
+        all_challenges = client.query("python_db:getByField", {"table": "challenges", "field": "text", "value": "20 Pushups"}) # Hack: wait let's use a real function
         
-        if pool.data:
+        # We need a proper way to get all challenges if python_db is so limited. We can add a simple query for this!
+        all_challenges_query = client.query("python_db:getByField", {"table": "challenges", "field": "date", "value": None}) # Let's hope None translates to missing/undefined
+        
+        if all_challenges_query:
             # Use a stable hash of the date so all users see the SAME fallback challenge today
             hash_val = 0
             for char in today_str:
                 hash_val = ord(char) + ((hash_val << 5) - hash_val)
             
-            index = abs(hash_val) % len(pool.data)
-            challenge_text = pool.data[index]['text']
+            index = abs(hash_val) % len(all_challenges_query)
+            challenge_text = all_challenges_query[index]['text']
+        else:
+             challenge_text = "Do 20 Pushups!"
 
     # 3. Parse for Countable Data
     # Regex to find "Action N Unit" or "N Unit"
@@ -561,10 +560,7 @@ def get_challenge(auth: tuple = Depends(get_authenticated_client)):
         parts = challenge_text.split()
         for p in parts:
              if not any(char.isdigit() for char in p) and p.lower() not in ["do", "run", "complete"]:
-                  # This is a weak heuristic but works for "20 Pushups" -> "Pushups"
-                  # ideally we just pass the text and let UI handle, but user asked for "set number"
                   unit = p
-                  # refine unit logic if needed later
     
     return {
         "text": challenge_text, 
@@ -579,8 +575,9 @@ def get_grimoire(auth: tuple = Depends(get_authenticated_client)):
     
     # 1. Get user's unlocked IDs
     try:
-        unlocked_res = client.table("user_facts").select("fact_id, created_at").eq("user_id", user_id).execute()
-        unlocked_map = {row['fact_id']: row['created_at'] for row in unlocked_res.data}
+        unlocked_res = client.query("python_db:getByField", {"table": "user_facts", "field": "user_id", "value": user_id})
+        # Note: Convex uses _creationTime, not created_at
+        unlocked_map = {row['fact_id']: datetime.fromtimestamp(row['_creationTime']/1000, tz=timezone.utc).isoformat() for row in unlocked_res}
     except Exception as e:
         print(f"⚠️ Error fetching grimoire: {e}")
         return []

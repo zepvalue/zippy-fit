@@ -2,8 +2,8 @@ import React from 'react';
 import { View, Text, StyleSheet, Modal, TouchableOpacity, Alert, ScrollView } from 'react-native';
 import { BlurView } from 'expo-blur';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { api } from '../../lib/api';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { api } from '../../convex/_generated/api';
+import { useMutation } from 'convex/react';
 
 interface DebugMenuProps {
     visible: boolean;
@@ -13,18 +13,16 @@ interface DebugMenuProps {
 }
 
 export default function DebugMenu({ visible, onClose, onReset, token }: DebugMenuProps) {
+    const logWorkout = useMutation(api.workouts.log);
+
     if (!visible) return null;
 
     const handleAction = async (action: string, payload?: any) => {
-        const storedToken = await AsyncStorage.getItem('userToken');
-        if (!storedToken) return;
-
         try {
             if (action === 'attack') {
-                await api.logWorkout(storedToken, payload); // payload is damage
+                await logWorkout({ damage: payload, duration_minutes: 0 });
                 Alert.alert("Attack Sent", `Dealt ${payload} damage!`);
             } else if (action === 'reset_team') {
-                // Implement reset logic if API supports it, or just nuke local
                 Alert.alert("Reset", "Team reset logic not fully implemented yet.");
             }
         } catch (e) {
