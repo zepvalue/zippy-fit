@@ -113,6 +113,12 @@ zippy-fit/
 
 ---
 
+## 🎨 Credits
+
+Zippy's animated mascot GIFs were generated with [ComfyUI](https://github.com/comfyanonymous/ComfyUI).
+
+---
+
 <div align="center">
 
 Built with ❤️ and a refusal to skip leg day.
