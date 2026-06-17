@@ -56,6 +56,8 @@ ZippyFit turns accountability into a co-op game. You and a partner form a **Duo*
 
 ## 🚀 Getting Started
 
+> 🖥️ **Runs fully local right now** — Expo Go + a local FastAPI backend (tunnelled via ngrok) + a Convex dev deployment. Next up: native builds and tester distribution via **Fastlane** and **Firebase App Distribution**.
+
 ```bash
 # 1. Install dependencies (mobile + backend)
 make install
@@ -66,20 +68,16 @@ make dev
 
 Then scan the QR code with **Expo Go**, or press `a` / `i` to launch an emulator.
 
-### Handy commands
-
-Run **`make`** (or `make help`) any time to see the full categorized menu — commands are grouped into Development / Setup / Quality / Utilities / Maintenance.
+### Essential commands
 
 | Command | What it does |
 |---------|--------------|
-| `make help` | Show the categorized command menu |
-| `make dev` | Full stack — tunnel, backend, mobile |
-| `make backend` | Backend only (Convex + uvicorn) |
-| `make mobile` | Expo only |
+| `make dev` | Run the full stack (tunnel + backend + mobile) |
 | `make test` | Run mobile tests |
-| `make screenshot` | Capture a screenshot from a connected Android device |
-| `make reset-password EMAIL=… PASSWORD=…` | Admin password reset |
-| `make kill` | Kill all dev processes & free ports |
+| `make kill` | Kill dev processes & free ports |
+| `make help` | See every command (grouped menu) |
+
+Run **`make help`** for the full list — admin/utility commands (screenshots, password reset, etc.) live there.
 
 ---
 
@@ -102,6 +100,8 @@ zippy-fit/
 
 ## 🗺️ Roadmap
 
+- [ ] **Fastlane** — automated build & release pipeline
+- [ ] **Firebase App Distribution** — ship test builds to testers
 - [ ] **Push notifications** — nudges & streak-at-risk reminders
 - [ ] **Forgot-password flow** — in-app reset (Convex Auth email provider)
 - [ ] **Grimoire content** — replace placeholder facts with a curated library
