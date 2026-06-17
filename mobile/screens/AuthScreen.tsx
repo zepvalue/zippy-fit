@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { View, Text, TextInput, StyleSheet, Alert, Image, TouchableOpacity } from 'react-native';
+import { Stack } from 'expo-router';
 import { useAuthActions } from "@convex-dev/auth/react";
 import DuoButton from '../components/ui/DuoButton';
 import Container from '@/components/ui/Container';
@@ -37,6 +38,7 @@ export default function AuthScreen() {
 
     return (
         <Container style={{ justifyContent: 'center' }}>
+            <Stack.Screen options={{ headerShown: false, contentStyle: { backgroundColor: '#FFF8E7' } }} />
             <View style={{
                 width: 150, height: 150, borderRadius: 75, backgroundColor: '#F9F9F9',
                 justifyContent: 'center', alignItems: 'center', alignSelf: 'center', marginBottom: 10,

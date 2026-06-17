@@ -6,37 +6,39 @@ import DashboardScreen from '../screens/DashboardScreen';
 import AuthScreen from '../screens/AuthScreen';
 import TutorialScreen from '../screens/TutorialScreen';
 
+function Loading() {
+  return (
+    <View style={{ flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: '#000' }}>
+      <ActivityIndicator size="large" color="#FF4B4B" />
+    </View>
+  );
+}
+
 export default function Index() {
   const { isLoading, isAuthenticated } = useConvexAuth();
-  // Only run when authenticated — returns null/undefined otherwise
   const dashboardData = useQuery(
     api.dashboard.get,
     isAuthenticated ? {} : "skip"
   );
 
   if (isLoading) {
-    return (
-      <View style={{ flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: '#000' }}>
-        <ActivityIndicator size="large" color="#FF4B4B" />
-      </View>
-    );
+    return <Loading />;
   }
 
   if (!isAuthenticated) {
     return <AuthScreen />;
   }
 
-  // Still loading dashboard data
-  if (dashboardData === undefined) {
-    return (
-      <View style={{ flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: '#000' }}>
-        <ActivityIndicator size="large" color="#FF4B4B" />
-      </View>
-    );
+  // Query in flight or auth not yet resolved server-side — wait, don't fall
+  // through to the tutorial (that was the original bug: null was treated as
+  // "no team").
+  if (dashboardData === undefined || dashboardData === null) {
+    return <Loading />;
   }
 
-  // User has no team — send them to onboarding
-  if (!dashboardData?.has_team) {
+  // Authenticated and resolved: show onboarding/team-setup only when there is
+  // genuinely no team. A user with a team goes straight to the dashboard.
+  if (dashboardData.has_team === false) {
     return <TutorialScreen />;
   }
 

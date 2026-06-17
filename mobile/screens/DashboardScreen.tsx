@@ -42,17 +42,6 @@ export default function DashboardScreen() {
     const [unlockedFact, setUnlockedFact] = useState<{ title: string; text: string } | null>(null);
     const [grimoireVisible, setGrimoireVisible] = useState(false);
 
-    useEffect(() => {
-        checkTutorial();
-    }, []);
-
-    const checkTutorial = async () => {
-        const done = await AsyncStorage.getItem('tutorial_completed');
-        if (done !== 'true') {
-            setTutorialVisible(true);
-        }
-    };
-
     // Derived State from Convex Data
     const isLoading = dashboardData === undefined;
 
@@ -313,7 +302,7 @@ export default function DashboardScreen() {
                     onClose={() => setProfileVisible(false)}
                     code={teamCode}
                     onDebug={() => setDebugVisible(true)}
-                    onReplayTutorial={() => setTutorialVisible(true)}
+                    onReplayTutorial={() => { setProfileVisible(false); setTutorialVisible(true); }}
                 />
 
                 <DebugMenu
@@ -327,11 +316,8 @@ export default function DashboardScreen() {
                 />
 
                 {/* TUTORIAL MODAL */}
-                <Modal visible={tutorialVisible} animationType="slide">
-                    <TutorialScreen onComplete={async () => {
-                        await AsyncStorage.setItem('tutorial_completed', 'true');
-                        setTutorialVisible(false);
-                    }} />
+                <Modal visible={tutorialVisible} animationType="fade" transparent statusBarTranslucent>
+                    <TutorialScreen asCard onComplete={() => setTutorialVisible(false)} />
                 </Modal>
 
                 {/* GRIMOIRE MODAL */}

@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { View, StyleSheet, ViewStyle, Platform } from 'react-native';
+import { View, StyleSheet, ViewStyle, Platform, StatusBar } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import Animated, { useSharedValue, withRepeat, withTiming, Easing, useAnimatedStyle } from 'react-native-reanimated';
 
@@ -42,10 +42,10 @@ export default function Container({ children, style }: ContainerProps) {
 
     return (
         <LinearGradient
-            // Warmer, softer gradient base
             colors={['#FFF8E7', '#FFFFFF']}
             style={styles.outerBackground}
         >
+            <StatusBar barStyle="dark-content" backgroundColor="transparent" translucent />
             {/* Background Blobs */}
             <View style={styles.blobContainer} pointerEvents="none">
                 <Animated.View style={[styles.blob, styles.blob1, blob1Style]} />
