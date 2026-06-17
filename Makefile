@@ -1,4 +1,4 @@
-.PHONY: help dev backend mobile install install-backend install-mobile test lint clean kill reset-password check-user assign-team screenshot
+.PHONY: help dev backend mobile install install-backend install-mobile test lint clean kill reset-password check-user assign-team screenshot reel reel-record reel-frame
 
 .DEFAULT_GOAL := help
 
@@ -45,6 +45,15 @@ assign-team: ## Force-assign a user to a team — EMAIL=… CODE=…
 
 screenshot: ## Capture a device screenshot — optional OUT=path/to/file.png
 	@bash scripts/utils/screenshot.sh "$(OUT)"
+
+reel: ## Build a 9:16 IG Reel by panning a tall screenshot — optional IN=… OUT=…
+	@bash scripts/utils/reel-pan.sh "$(IN)" "$(OUT)"
+
+reel-record: ## Record the device and frame it as a 9:16 IG Reel — optional OUT=…
+	@bash scripts/utils/reel-record.sh "$(OUT)"
+
+reel-frame: ## Frame an existing video onto the 9:16 canvas — IN=clip.mp4 [OUT=…]
+	@bash scripts/utils/reel-frame.sh "$(IN)" "$(OUT)"
 
 ##@ Maintenance
 kill: ## Kill all dev processes and free ports 8000/8081
