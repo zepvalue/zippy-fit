@@ -22,7 +22,6 @@ export const history = query({
         return workouts.map(w => ({
             id: w._id,
             date: new Date(w._creationTime).toISOString().split("T")[0],
-            damage: w.damage || 0,
             is_spot_fill: w.is_spot_fill || false,
         }));
     },
@@ -30,7 +29,6 @@ export const history = query({
 
 export const log = mutation({
     args: {
-        damage: v.number(),
         duration_minutes: v.number(),
     },
     handler: async (ctx, args) => {
@@ -44,32 +42,19 @@ export const log = mutation({
             throw new Error("Not in a team");
         }
 
-        const team = await ctx.db.get(user.team_id);
-        if (!team) {
-            throw new Error("Team not found");
-        }
-
         // Add workout
         const workoutId = await ctx.db.insert("workouts", {
             user_id: userId,
             team_id: user.team_id,
-            damage: args.damage,
             duration_minutes: args.duration_minutes,
             is_spot_fill: false,
         });
-
-        // Update boss HP
-        const newBossHp = Math.max(0, team.boss_hp - args.damage);
 
         // Unlock a random fact
         const fact_id = Math.floor(Math.random() * 10) + 1;
         await ctx.db.insert("user_facts", {
             user_id: userId,
             fact_id: fact_id,
-        });
-
-        await ctx.db.patch(team._id, {
-            boss_hp: newBossHp
         });
 
         return {

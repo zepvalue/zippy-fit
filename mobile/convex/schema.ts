@@ -30,12 +30,6 @@ export default defineSchema({
         // Repair / Critical State
         repair_deadline: v.optional(v.string()),
 
-        // Boss Battle
-        boss_hp: v.number(),
-        boss_max_hp: v.number(),
-        boss_name: v.string(),
-        boss_image_index: v.number(),
-
         // Nudge & Spot
         last_nudge_at: v.optional(v.string()),
         nudge_from_id: v.optional(v.string()),
@@ -49,7 +43,6 @@ export default defineSchema({
         team_id: v.id("teams"),
         is_spot_fill: v.optional(v.boolean()),
         duration_minutes: v.optional(v.number()),
-        damage: v.optional(v.number()),
     }).index("by_team_id", ["team_id"])
         .index("by_user_id", ["user_id"]),
 

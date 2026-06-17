@@ -106,7 +106,7 @@ zippy-fit/
 - [ ] **Forgot-password flow** — in-app reset (Convex Auth email provider)
 - [ ] **Grimoire content** — replace placeholder facts with a curated library
 - [ ] **Refresher polish** — show only educational slides when replaying from settings
-- [ ] **Workout types** — log cardio / strength / mobility with distinct damage
+- [ ] **Workout types** — log cardio / strength / mobility separately
 - [ ] **Partner profiles & avatars**
 - [ ] **Test coverage** — expand TDD suite across screens and Convex functions
 - [ ] **CI** — lint + typecheck + tests on every PR

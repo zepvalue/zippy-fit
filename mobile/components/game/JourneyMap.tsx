@@ -24,12 +24,6 @@ const TARGET_NODE_DISTANCE = 180;
 const TOP_PADDING = 180; // Reduced further to move map higher
 const BOTTOM_PADDING = 370; // HUGE spacing at bottom to clear the "Challenge Drawer"
 
-// Helper to check if a date is a "Boss" node
-const isBossNode = (date: Date, index: number) => {
-    // Arbitrary logic: Every 7 days or weekends
-    return (index + 1) % 7 === 0;
-};
-
 interface Point {
     x: number;
     y: number;
@@ -252,17 +246,12 @@ export default function JourneyMap({ history, onSpotRequest, canRequestSpot, spo
 
                     if (index < realTodayIndex) {
                         // Future
-                        status = isBossNode(dateObj, logicalIndex) ? 'boss' : 'locked';
+                        status = 'locked';
                     } else if (index === realTodayIndex) {
                         status = 'active';
                     } else {
                         // Past
                         status = isCompleted ? 'perfect' : 'locked';
-                        // Keep boss styling if it was a boss node even if locked/done?
-                        // PathNode handles precedence usually, but let's be explicit
-                        if (isBossNode(dateObj, logicalIndex) && status === 'locked') {
-                            status = 'boss';
-                        }
                     }
 
                     // Absolute Position

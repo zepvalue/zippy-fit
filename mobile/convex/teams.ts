@@ -37,10 +37,6 @@ export const create = mutation({
             hearts: 3,
             streak: 0,
             freezes_available: 0,
-            boss_hp: 10000,
-            boss_max_hp: 10000,
-            boss_name: "The Sloth King",
-            boss_image_index: 0,
         });
 
         // 3. Link User to Team

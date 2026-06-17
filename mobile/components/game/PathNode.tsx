@@ -1,9 +1,9 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
-import { Check, Flame, Lock, Star } from 'lucide-react-native';
+import { Check, Flame, Lock } from 'lucide-react-native';
 import { MotiView } from 'moti';
 
-export type PathNodeStatus = 'locked' | 'active' | 'done' | 'perfect' | 'boss';
+export type PathNodeStatus = 'locked' | 'active' | 'done' | 'perfect';
 
 interface PathNodeProps {
     day: number;
@@ -36,14 +36,6 @@ export default function PathNode({ day, status }: PathNodeProps) {
         shadowColor = "#B91C1C";
         icon = <Flame size={28} color="white" fill="white" />;
         textColor = "#EF4444";
-    } else if (status === 'boss') {
-        faceColor = "#FFFFFF";
-        shadowColor = "#E5E7EB";
-        borderColor = "#FACC15"; // Gold Border
-        borderWidth = 6;
-        size = 100; // 1.5x Larger roughly (standard is 70)
-        icon = <Star size={40} color="#FACC15" fill="#FACC15" />;
-        textColor = "#FACC15";
     }
 
     return (

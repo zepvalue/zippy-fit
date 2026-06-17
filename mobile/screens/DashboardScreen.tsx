@@ -65,8 +65,7 @@ export default function DashboardScreen() {
             // Optimistic updates are handled by Convex automatically!
             // But we might want to show a spinner if it's slow.
 
-            const damage = 500;
-            const res = await logWorkout({ damage, duration_minutes: 30 });
+            const res = await logWorkout({ duration_minutes: 30 });
             console.log("🟢 API Response for Workout:", JSON.stringify(res));
 
             if (res.new_fact_id) {

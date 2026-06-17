@@ -9,7 +9,6 @@ interface ChallengeOfTheDayProps {
     challengeText: string;
     onComplete: () => void;
     isCompleted: boolean;
-    type?: 'normal' | 'boss';
     mascotStatus?: 'SAFE' | 'AT_RISK' | 'SLEEPING';
     variant?: 'card' | 'sheet' | 'drawer'; // NEW: Determine layout style
 }
@@ -25,9 +24,7 @@ const MESSAGES = {
     SLEEPING: ["Workout Needed! ", "Wake up partner! 📢", "I'm nappin' here...", "Did they forget? 🤔"]
 };
 
-export default function ChallengeOfTheDay({ challengeText, onComplete, isCompleted, type = 'normal', mascotStatus = 'AT_RISK', variant = 'card' }: ChallengeOfTheDayProps) {
-    // Legacy flags removed
-
+export default function ChallengeOfTheDay({ challengeText, onComplete, isCompleted, mascotStatus = 'AT_RISK', variant = 'card' }: ChallengeOfTheDayProps) {
     // Ref to track completion for PanResponder which is created once
     const isCompletedRef = useRef(isCompleted);
     useEffect(() => {
@@ -35,8 +32,7 @@ export default function ChallengeOfTheDay({ challengeText, onComplete, isComplet
     }, [isCompleted]);
 
     // COLORS
-    let mainColor = '#58CC02'; // Green
-    if (type === 'boss') mainColor = '#DC2626'; // Boss Red
+    const mainColor = '#58CC02'; // Green
 
     // MASCOT
     let mascotSource;
@@ -296,7 +292,7 @@ const styles = StyleSheet.create({
     // ...
     speechBubble: {
         position: 'absolute',
-        top: 0, // Higher, right by Zippy (BossWidget gone)
+        top: 0, // Higher, right by Zippy
         right: 100, // To the left of Zippy
         backgroundColor: 'white',
         paddingHorizontal: 12,
