@@ -4,7 +4,7 @@
 
 ### The fitness game you play with a partner.
 
-*Work out together, keep your streak alive, and slay the boss — miss a day and you __both__ feel it.*
+*Work out together and keep your streak alive — miss a day and you __both__ feel it.*
 
 <br/>
 
@@ -20,18 +20,14 @@
 
 ## ✨ What is ZippyFit?
 
-ZippyFit turns accountability into a co-op game. You and a partner form a **Duo**, take on a **daily challenge**, and every workout you log deals damage to a shared **boss**. Stay consistent to grow your **streak** — slack off and your team loses **hearts**. It's Duolingo's streak psychology, pointed at the gym.
+ZippyFit turns accountability into a co-op game. You and a partner form a **Duo** and take on a **daily challenge** together. Stay consistent to grow your **streak** — slack off and your team loses **hearts**. It's Duolingo's streak psychology, pointed at the gym.
 
 <div align="center">
-<img src="docs/screenshots/dashboard.png" width="220" alt="Journey map with Zippy the mascot"/>
-&nbsp;&nbsp;
-<img src="docs/screenshots/grimoire.png" width="220" alt="The Grimoire — unlocked fitness facts"/>
-&nbsp;&nbsp;
-<img src="docs/screenshots/nudge.png" width="220" alt="Nudge your partner"/>
-<br/><br/>
-<img src="docs/screenshots/profile.png" width="220" alt="Profile & team invite code"/>
-&nbsp;&nbsp;
-<img src="docs/screenshots/tutorial-card.png" width="220" alt="Tutorial refresher card"/>
+<img src="docs/screenshots/dashboard.png" width="250" alt="Journey map with Zippy the mascot"/>
+&nbsp;&nbsp;&nbsp;
+<img src="docs/screenshots/nudge.png" width="250" alt="Nudge your partner"/>
+&nbsp;&nbsp;&nbsp;
+<img src="docs/screenshots/grimoire.png" width="250" alt="The Grimoire — unlocked fitness facts"/>
 </div>
 
 ---
@@ -40,7 +36,6 @@ ZippyFit turns accountability into a co-op game. You and a partner form a **Duo*
 
 - 👯 **Duo teams** — pair up with a 4-character invite code
 - 🔥 **Streaks & hearts** — shared accountability; if one partner misses, you both lose a heart
-- 🐉 **Boss battles** — every logged workout chips away at the team boss's HP
 - 🗺️ **Journey map** — a visual day-by-day path of your team's progress
 - 📜 **Grimoire** — unlock a "Scroll Fragment" of fitness wisdom on every workout
 - 👋 **Nudge & Spot** — poke your partner or request a spot when you can't make it
@@ -109,7 +104,6 @@ zippy-fit/
 
 - [ ] **Push notifications** — nudges & streak-at-risk reminders
 - [ ] **Forgot-password flow** — in-app reset (Convex Auth email provider)
-- [ ] **Real boss roster** — multiple bosses with art & scaling HP
 - [ ] **Grimoire content** — replace placeholder facts with a curated library
 - [ ] **Refresher polish** — show only educational slides when replaying from settings
 - [ ] **Workout types** — log cardio / strength / mobility with distinct damage
