@@ -7,4 +7,4 @@ if [ ! -d "node_modules" ]; then
 fi
 
 echo "Starting Mobile App..."
-npx expo start --tunnel
+npx expo start --tunnel -c

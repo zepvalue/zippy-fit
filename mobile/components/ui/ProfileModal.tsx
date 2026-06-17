@@ -1,19 +1,27 @@
 import React from 'react';
 import { View, Text, StyleSheet, Modal, TouchableOpacity } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { supabase } from '../../lib/supabase';
-
 import DuoButton from './DuoButton';
+import { useAuthActions } from "@convex-dev/auth/react";
+import { useQuery } from "convex/react";
+import { api } from "../../convex/_generated/api";
 
 interface ProfileModalProps {
     visible: boolean;
     onClose: () => void;
-    session: any;
+    code: string;
+    onReplayTutorial: () => void;
+    onDebug?: () => void;
 }
 
-export default function ProfileModal({ visible, onClose, session }: ProfileModalProps) {
+export default function ProfileModal({ visible, onClose, code, onReplayTutorial, onDebug }: ProfileModalProps) {
+    const { signOut } = useAuthActions();
+    const user = useQuery(api.users.current);
+
+    const email = user?.email || "User";
+
     const handleSignOut = async () => {
-        await supabase.auth.signOut();
+        await signOut();
         onClose();
     };
 
@@ -37,7 +45,30 @@ export default function ProfileModal({ visible, onClose, session }: ProfileModal
                         <View style={styles.avatar}>
                             <MaterialCommunityIcons name="account" size={40} color="white" />
                         </View>
-                        <Text style={styles.email}>{session?.user?.email}</Text>
+                        <Text style={styles.email}>{email}</Text>
+
+                        <View style={styles.codeContainer}>
+                            <Text style={styles.codeLabel}>TEAM CODE</Text>
+                            <Text style={styles.codeValue}>{code || "----"}</Text>
+                        </View>
+
+                        <TouchableOpacity
+                            style={{ flexDirection: 'row', alignItems: 'center', marginTop: 20 }}
+                            onPress={onReplayTutorial}
+                        >
+                            <MaterialCommunityIcons name="help-circle-outline" size={20} color="#3B82F6" />
+                            <Text style={{ marginLeft: 8, color: '#3B82F6', fontWeight: 'bold' }}>REPLAY TUTORIAL</Text>
+                        </TouchableOpacity>
+
+                        {onDebug && (
+                            <TouchableOpacity
+                                style={{ flexDirection: 'row', alignItems: 'center', marginTop: 20 }}
+                                onPress={() => { onClose(); onDebug(); }}
+                            >
+                                <MaterialCommunityIcons name="bug" size={20} color="#EF4444" />
+                                <Text style={{ marginLeft: 8, color: '#EF4444', fontWeight: 'bold' }}>DEBUG MENU</Text>
+                            </TouchableOpacity>
+                        )}
                     </View>
 
                     <DuoButton
@@ -83,7 +114,8 @@ const styles = StyleSheet.create({
     },
     userInfo: {
         alignItems: 'center',
-        marginBottom: 40
+        marginBottom: 40,
+        width: '100%'
     },
     avatar: {
         width: 80,
@@ -97,6 +129,29 @@ const styles = StyleSheet.create({
     email: {
         fontSize: 16,
         fontWeight: 'bold',
-        color: '#4B4B4B'
+        color: '#4B4B4B',
+        marginBottom: 20
     },
+    codeContainer: {
+        backgroundColor: '#F7F7F7',
+        padding: 15,
+        borderRadius: 16,
+        alignItems: 'center',
+        width: '100%',
+        borderWidth: 2,
+        borderColor: '#E5E5E5'
+    },
+    codeLabel: {
+        fontSize: 12,
+        fontWeight: 'bold',
+        color: '#B0B0B0',
+        marginBottom: 5,
+        letterSpacing: 1
+    },
+    codeValue: {
+        fontSize: 24,
+        fontWeight: '900',
+        color: '#58CC02',
+        letterSpacing: 3
+    }
 });

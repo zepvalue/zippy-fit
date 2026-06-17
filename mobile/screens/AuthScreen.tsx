@@ -1,71 +1,59 @@
 import React, { useState } from 'react';
-import { View, Text, TextInput, StyleSheet, Alert } from 'react-native';
-import { supabase } from '../lib/supabase';
+import { View, Text, TextInput, StyleSheet, Alert, Image, TouchableOpacity } from 'react-native';
+import { Stack } from 'expo-router';
+import { useAuthActions } from "@convex-dev/auth/react";
 import DuoButton from '../components/ui/DuoButton';
 import Container from '@/components/ui/Container';
 
 export default function AuthScreen() {
+    const { signIn } = useAuthActions();
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [loading, setLoading] = useState(false);
+    const [isLogin, setIsLogin] = useState(true);
 
-    // Helper to translate technical errors to friendly messages
-    function getErrorMessage(error: any) {
-        const msg = error.message || "Unknown error";
-        if (msg.includes("Invalid login credentials")) return "Incorrect email or password.";
-        if (msg.includes("already registered")) return "This email is already in use. Try logging in.";
-        if (msg.includes("password should be")) return "Password is too weak. content length must be at least 6 characters.";
-        if (msg.includes("invalid_grant")) return "Invalid login details.";
-        return msg;
-    }
-
-    // Helper for validation
-    function validateInputs() {
+    async function handleAuth() {
         if (!email.trim() || !password.trim()) {
-            Alert.alert("Missing Info", "Please enter both email and password.");
-            return false;
+            Alert.alert("Error", "Please enter both email and password.");
+            return;
         }
-        return true;
-    }
-
-    async function signInWithEmail() {
-        if (!validateInputs()) return;
         setLoading(true);
-        const { error } = await supabase.auth.signInWithPassword({
-            email: email,
-            password: password,
-        });
-
-        if (error) {
-            Alert.alert("Login Failed", getErrorMessage(error));
-        }
-        setLoading(false);
-    }
-
-    async function signUpWithEmail() {
-        if (!validateInputs()) return;
-        setLoading(true);
-        const { error } = await supabase.auth.signUp({
-            email: email,
-            password: password,
-            options: {
-                emailRedirectTo: 'zippyfit://auth-callback'
+        try {
+            const flow = isLogin ? "signIn" : "signUp";
+            await signIn("password", { email, password, flow });
+            // For email verification flow, we might need to handle the step parameter
+            // But for simple password auth (if configured dev mode or without verification), it might just log in.
+        } catch (error: any) {
+            let errorMsg = error.message || "Unknown error";
+            if (errorMsg.includes("InvalidSecret")) {
+                errorMsg = "Incorrect password.";
+            } else if (errorMsg.includes("InvalidAccountId")) {
+                errorMsg = "Account not found.";
             }
-        });
-
-        if (error) {
-            Alert.alert("Signup Failed", getErrorMessage(error));
-        } else {
-            Alert.alert("Check your inbox!", "We sent you a verification link.");
+            Alert.alert("Authentication Failed", errorMsg);
+        } finally {
+            setLoading(false);
         }
-        setLoading(false);
     }
 
     return (
         <Container style={{ justifyContent: 'center' }}>
+            <Stack.Screen options={{ headerShown: false, contentStyle: { backgroundColor: '#FFF8E7' } }} />
+            <View style={{
+                width: 150, height: 150, borderRadius: 75, backgroundColor: '#F9F9F9',
+                justifyContent: 'center', alignItems: 'center', alignSelf: 'center', marginBottom: 10,
+                shadowColor: "#000", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.1, shadowRadius: 4, elevation: 3,
+                // Removed overflow: 'hidden' to prevent clipping animation
+            }}>
+                <Image
+                    source={require('../assets/animations/happy_zippy_animated.gif')}
+                    style={{ width: 110, height: 110 }}
+                    resizeMode="contain"
+                />
+            </View>
             <Text style={styles.title}> ZippyFit </Text>
 
-            < View style={styles.inputContainer} >
+            <View style={styles.inputContainer}>
                 <TextInput
                     placeholder="Email"
                     placeholderTextColor="#A0A0A0"
@@ -84,8 +72,16 @@ export default function AuthScreen() {
                 />
             </View>
 
-            < DuoButton title={loading ? "Loading..." : "LOG IN"} onPress={signInWithEmail} />
-            <DuoButton title="CREATE ACCOUNT" onPress={signUpWithEmail} color="#fff" textColor="#58CC02" shadowColor="#E5E5E5" />
+            <DuoButton
+                title={loading ? "Loading..." : (isLogin ? "LOG IN" : "CREATE ACCOUNT")}
+                onPress={handleAuth}
+            />
+
+            <TouchableOpacity onPress={() => setIsLogin(!isLogin)} style={{ marginTop: 20 }}>
+                <Text style={styles.linkText}>
+                    {isLogin ? "Don't have an account? Sign Up" : "Already have an account? Log In"}
+                </Text>
+            </TouchableOpacity>
         </Container>
     );
 }
@@ -102,6 +98,12 @@ const styles = StyleSheet.create({
         fontSize: 18,
         marginBottom: 10,
         backgroundColor: '#F7F7F7',
-        color: '#333333' // Ensure text is visible
+        color: '#333333'
+    },
+    linkText: {
+        color: '#58CC02',
+        textAlign: 'center',
+        fontWeight: 'bold',
+        fontSize: 16
     }
 });

@@ -9,7 +9,15 @@ if [ ! -f "$PYTHON" ]; then
     exit 1
 fi
 
-# 3. Run Uvicorn
+# 3. Start Convex in the background BEFORE the Python server
+echo -e "\033[0;35m☁️ Starting Convex Database connection...\033[0m"
+(cd ../mobile && npx convex dev) &
+CONVEX_PID=$!
+
+# Trap Ctrl+C (SIGINT) to cleanly shut down both servers
+trap 'echo -e "\n\033[0;31m🛑 Shutting down servers...\033[0m"; kill $CONVEX_PID; exit' SIGINT
+
+# 4. Run Uvicorn
 # We use ANSI escape codes for Cyan color output
 echo -e "\033[0;36m🚀 Starting Brain...\033[0m"
 
