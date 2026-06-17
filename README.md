@@ -23,11 +23,15 @@
 ZippyFit turns accountability into a co-op game. You and a partner form a **Duo**, take on a **daily challenge**, and every workout you log deals damage to a shared **boss**. Stay consistent to grow your **streak** — slack off and your team loses **hearts**. It's Duolingo's streak psychology, pointed at the gym.
 
 <div align="center">
-<img src="docs/screenshots/dashboard.png" width="260" alt="Journey map with Zippy the mascot"/>
-&nbsp;&nbsp;&nbsp;
-<img src="docs/screenshots/onboarding.png" width="260" alt="Onboarding welcome"/>
-&nbsp;&nbsp;&nbsp;
-<img src="docs/screenshots/tutorial-card.png" width="260" alt="Tutorial refresher card"/>
+<img src="docs/screenshots/dashboard.png" width="220" alt="Journey map with Zippy the mascot"/>
+&nbsp;&nbsp;
+<img src="docs/screenshots/grimoire.png" width="220" alt="The Grimoire — unlocked fitness facts"/>
+&nbsp;&nbsp;
+<img src="docs/screenshots/nudge.png" width="220" alt="Nudge your partner"/>
+<br/><br/>
+<img src="docs/screenshots/profile.png" width="220" alt="Profile & team invite code"/>
+&nbsp;&nbsp;
+<img src="docs/screenshots/tutorial-card.png" width="220" alt="Tutorial refresher card"/>
 </div>
 
 ---
