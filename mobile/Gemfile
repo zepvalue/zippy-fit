@@ -1,0 +1,5 @@
+source "https://rubygems.org"
+
+# Pin Fastlane so local and CI builds are reproducible. Run `bundle install`, then
+# invoke lanes with `bundle exec fastlane ...`.
+gem "fastlane", "~> 2.236"

@@ -41,3 +41,11 @@ app-example
 # generated native folders
 /ios
 /android
+
+# fastlane
+fastlane/report.xml
+fastlane/Preview.html
+fastlane/test_output
+fastlane/play-store-key.json
+*.aab
+*.ipa
