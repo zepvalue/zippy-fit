@@ -1,65 +1,53 @@
-# Local release pipeline (no EAS Build)
+fastlane documentation
+----
 
-Builds the release `.aab` **on your machine** and uploads to Google Play — zero EAS
-cloud build credits. App id: `com.zepvalue.zippyfit`.
+# Installation
 
-## How it fits together
+Make sure you have the latest version of the Xcode command line tools installed:
 
-- `android/` is **generated** by `expo prebuild` and gitignored. Treat it as disposable —
-  regenerate with `expo prebuild -p android --clean`, never hand-edit it. The day you
-  edit a native file by hand, you've ejected the managed workflow.
-- Release signing is injected on every prebuild by the
-  [`withAndroidReleaseSigning`](../plugins/withAndroidReleaseSigning.js) config plugin,
-  which reads the keystore from **Gradle properties stored outside the repo**. No secret
-  ever lives in git.
-
-## One-time setup
-
-### 1. Generate an upload keystore (keep it safe — losing it loses the app)
-
-```bash
-keytool -genkeypair -v -keystore ~/.zippyfit-upload.jks \
-  -alias zippyfit-upload -keyalg RSA -keysize 2048 -validity 10000
+```sh
+xcode-select --install
 ```
 
-### 2. Tell Gradle where it is (user-global, survives `prebuild --clean`)
+For _fastlane_ installation instructions, see [Installing _fastlane_](https://docs.fastlane.tools/#installing-fastlane)
 
-Add to `~/.gradle/gradle.properties` (NOT in this repo):
+# Available Actions
 
-```properties
-ZIPPYFIT_UPLOAD_STORE_FILE=/Users/<you>/.zippyfit-upload.jks
-ZIPPYFIT_UPLOAD_STORE_PASSWORD=<store password>
-ZIPPYFIT_UPLOAD_KEY_ALIAS=zippyfit-upload
-ZIPPYFIT_UPLOAD_KEY_PASSWORD=<key password>
+## Android
+
+### android build
+
+```sh
+[bundle exec] fastlane android build
 ```
 
-### 3. Google Play service-account key
+Regenerate native project and build a signed release .aab locally
 
-In Play Console → Setup → API access, create/link a service account with the
-"Release apps to testing tracks" permission, download its JSON key, and save it as
-`mobile/fastlane/play-store-key.json` (gitignored).
+### android deploy
 
-### 4. First upload is manual
-
-`supply` can only update an app that already has at least one build. For a brand-new
-listing, build once and upload that first `.aab` by hand in Play Console:
-
-```bash
-bundle install            # once, installs pinned fastlane
-bundle exec fastlane android build
-# → upload android/app/build/outputs/bundle/release/app-release.aab in Play Console
+```sh
+[bundle exec] fastlane android deploy
 ```
 
-## Every release after that
+Build, then upload to the Play Store internal track (listing must already exist)
 
-```bash
-bundle exec fastlane android deploy   # builds + uploads to the internal track as a draft
+----
+
+
+## iOS
+
+### ios deploy
+
+```sh
+[bundle exec] fastlane ios deploy
 ```
 
-Promote internal → production from Play Console when you're happy.
+iOS release (not yet configured)
 
-## iOS (later)
+----
 
-The `ios` lane is a stub. Shipping iOS needs a Mac + Xcode, an App Store Connect API key,
-and `match`/`gym`/`pilot` wiring. Do it when you actually want the App Store listing —
-$99/yr vs Android's $25 one-time.
+This README.md is auto-generated and will be re-generated every time [_fastlane_](https://fastlane.tools) is run.
+
+More information about _fastlane_ can be found on [fastlane.tools](https://fastlane.tools).
+
+The documentation of _fastlane_ can be found on [docs.fastlane.tools](https://docs.fastlane.tools).

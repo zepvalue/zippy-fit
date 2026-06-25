@@ -47,5 +47,8 @@ fastlane/report.xml
 fastlane/Preview.html
 fastlane/test_output
 fastlane/play-store-key.json
+fastlane/.env
+fastlane/.env.*
+!fastlane/.env.example
 *.aab
 *.ipa

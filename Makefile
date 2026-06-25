@@ -1,4 +1,4 @@
-.PHONY: help dev backend mobile install install-backend install-mobile test lint clean kill reset-password check-user assign-team screenshot reel reel-record reel-frame
+.PHONY: help dev backend mobile mobile-lan mobile-usb install install-backend install-mobile test lint clean kill reset-password check-user assign-team screenshot reel-record reel-frame android-build android-deploy
 
 .DEFAULT_GOAL := help
 
@@ -16,6 +16,13 @@ backend: ## Backend only (Convex + uvicorn)
 
 mobile: ## Mobile only (Expo with tunnel)
 	cd mobile && bash dev.sh
+
+mobile-lan: ## Mobile only (Expo over LAN, no tunnel — use for local recording)
+	cd mobile && npx expo start
+
+mobile-usb: ## Mobile over USB cable (adb reverse + localhost, no ngrok) — best for recording
+	@ADB=$$(command -v adb || echo $$HOME/Library/Android/sdk/platform-tools/adb); $$ADB reverse tcp:8081 tcp:8081 && echo "✅ USB forward set"
+	cd mobile && npx expo start --localhost
 
 ##@ Setup
 install: install-backend install-mobile ## Install all dependencies (backend + mobile)
@@ -43,17 +50,22 @@ check-user: ## Show a user's Convex state (team_id, etc.) — EMAIL=…
 assign-team: ## Force-assign a user to a team — EMAIL=… CODE=…
 	@bash scripts/utils/assign_team.sh "$(EMAIL)" "$(CODE)"
 
+##@ Social media (see social_media/README.md)
 screenshot: ## Capture a device screenshot — optional OUT=path/to/file.png
 	@bash scripts/utils/screenshot.sh "$(OUT)"
 
-reel: ## Build a 9:16 IG Reel by panning a tall screenshot — optional IN=… OUT=…
-	@bash scripts/utils/reel-pan.sh "$(IN)" "$(OUT)"
+reel-record: ## Record device → frame as 9:16 reel + stamp DAY badge + scaffold post — SLUG=… [DAY=…]
+	@bash social_media/scripts/reel-record.sh "$(OUT)"
 
-reel-record: ## Record the device and frame it as a 9:16 IG Reel — optional OUT=…
-	@bash scripts/utils/reel-record.sh "$(OUT)"
+reel-frame: ## Frame an existing video onto the 9:16 canvas — IN=clip.mp4 [OUT=…] [DAY=…]
+	@bash social_media/scripts/reel-frame.sh "$(IN)" "$(OUT)"
 
-reel-frame: ## Frame an existing video onto the 9:16 canvas — IN=clip.mp4 [OUT=…]
-	@bash scripts/utils/reel-frame.sh "$(IN)" "$(OUT)"
+##@ Release (Android — local, no EAS Build)
+android-build: ## Build a signed release .aab locally (needs fastlane/.env — see fastlane/README.md)
+	cd mobile && bundle exec fastlane android build
+
+android-deploy: ## Build + upload to Play Store internal track (needs play-store-key.json)
+	cd mobile && bundle exec fastlane android deploy
 
 ##@ Maintenance
 kill: ## Kill all dev processes and free ports 8000/8081

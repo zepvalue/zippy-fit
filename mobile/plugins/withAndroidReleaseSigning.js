@@ -59,7 +59,7 @@ function applyReleaseSigning(gradle) {
   return gradle;
 }
 
-module.exports = function withAndroidReleaseSigning(config) {
+function withAndroidReleaseSigning(config) {
   return withAppBuildGradle(config, (config) => {
     if (config.modResults.language !== 'groovy') {
       throw new Error(
@@ -70,4 +70,7 @@ module.exports = function withAndroidReleaseSigning(config) {
     config.modResults.contents = applyReleaseSigning(config.modResults.contents);
     return config;
   });
-};
+}
+
+module.exports = withAndroidReleaseSigning;
+module.exports.applyReleaseSigning = applyReleaseSigning;
