@@ -1,0 +1,331 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>ZippyFit — The fitness game you play with a partner</title>
+<meta name="description" content="ZippyFit turns accountability into a co-op game. Pair up, take on a daily challenge together and keep your shared streak alive." />
+<meta property="og:title" content="ZippyFit — The fitness game you play with a partner" />
+<meta property="og:description" content="Work out together and keep your streak alive. Miss a day and you both feel it." />
+<meta property="og:image" content="assets/icon.png" />
+<meta name="theme-color" content="#F2621B" />
+<link rel="icon" type="image/png" href="assets/icon.png" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@600;800;900&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --orange: #F2621B;
+    --orange-2: #FF9600;
+    --blue: #1E5BFF;
+    --sky: #2ED3F5;
+    --yellow: #FFC800;
+    --red: #FF4B4B;
+    --green: #2BC66B;
+    --bg: #FFFAF5;
+    --surface: #FFFFFF;
+    --text: #1F2937;
+    --muted: #5B6472;
+    --line: #F0E6DC;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #14161C;
+      --surface: #1D2029;
+      --text: #F3F4F6;
+      --muted: #A3A9B5;
+      --line: #2A2E39;
+    }
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font: 600 17px/1.6 "Nunito", system-ui, -apple-system, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  img { max-width: 100%; height: auto; display: block; }
+  a { color: inherit; }
+  .wrap { max-width: 1120px; margin: 0 auto; padding: 0 16px; }
+  h1, h2, h3 { font-weight: 900; line-height: 1.1; margin: 0; letter-spacing: -0.01em; }
+
+  /* Nav */
+  .nav { display: flex; align-items: center; justify-content: space-between; padding: 18px 0; }
+  .brand { display: flex; align-items: center; gap: 10px; font-weight: 900; font-size: 22px; text-decoration: none; }
+  .brand img { width: 40px; height: 40px; border-radius: 10px; }
+  .nav a.link { text-decoration: none; color: var(--muted); font-size: 15px; }
+  .nav a.link:hover { color: var(--text); }
+
+  /* Hero */
+  .hero {
+    position: relative;
+    overflow: hidden;
+    background: linear-gradient(160deg, var(--orange) 0%, var(--orange-2) 100%);
+    color: #fff;
+  }
+  .hero::before, .hero::after {
+    content: ""; position: absolute; border-radius: 50%;
+    background: rgba(255,255,255,0.08);
+  }
+  .hero::before { width: 520px; height: 520px; right: -160px; top: -200px; }
+  .hero::after { width: 380px; height: 380px; left: -140px; bottom: -220px; }
+  .hero .nav .brand, .hero .nav a.link { color: #fff; }
+  .hero-grid {
+    position: relative; z-index: 1;
+    display: grid; grid-template-columns: 1.1fr 0.9fr; gap: 40px; align-items: center;
+    padding: 40px 0 72px;
+  }
+  .eyebrow {
+    display: inline-block; padding: 6px 14px; border-radius: 999px;
+    background: rgba(255,255,255,0.18); font-size: 14px; font-weight: 800;
+    letter-spacing: 0.08em; text-transform: uppercase;
+  }
+  .hero h1 { font-size: clamp(40px, 6vw, 68px); margin: 18px 0 16px; }
+  .hero h1 em { font-style: normal; color: var(--yellow); }
+  .hero p.lead { font-size: 20px; max-width: 34ch; opacity: 0.95; margin: 0 0 28px; }
+  .cta-row { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
+  .btn {
+    display: inline-flex; align-items: center; gap: 10px;
+    padding: 14px 24px; border-radius: 16px; font-weight: 900; font-size: 17px;
+    text-decoration: none; border: 0; cursor: default;
+  }
+  .btn-soon { background: #fff; color: var(--orange); box-shadow: 0 6px 0 rgba(0,0,0,0.15); }
+  .btn-soon small { display: block; font-size: 12px; font-weight: 800; color: var(--muted); letter-spacing: 0.06em; text-transform: uppercase; }
+  .btn-soon span { line-height: 1.2; }
+  .btn-ghost { color: #fff; text-decoration: underline; text-underline-offset: 4px; padding: 14px 8px; cursor: pointer; }
+  .phone {
+    width: min(300px, 80vw); margin: 0 auto;
+    border-radius: 40px; padding: 10px; background: #111;
+    box-shadow: 0 30px 60px rgba(0,0,0,0.3);
+    transform: rotate(3deg);
+  }
+  .phone img { border-radius: 30px; aspect-ratio: 1080 / 2400; object-fit: cover; }
+
+  /* Sections */
+  section { padding: 80px 0; }
+  .section-head { text-align: center; max-width: 640px; margin: 0 auto 48px; }
+  .section-head h2 { font-size: clamp(30px, 4vw, 44px); margin-bottom: 12px; }
+  .section-head p { color: var(--muted); margin: 0; font-size: 18px; }
+
+  /* Steps */
+  .steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; counter-reset: step; }
+  .step {
+    background: var(--surface); border: 2px solid var(--line); border-radius: 24px;
+    padding: 28px; position: relative;
+  }
+  .step::before {
+    counter-increment: step; content: counter(step);
+    display: grid; place-items: center; width: 44px; height: 44px; border-radius: 14px;
+    background: var(--blue); color: #fff; font-weight: 900; font-size: 20px; margin-bottom: 16px;
+    box-shadow: 0 4px 0 #1443C4;
+  }
+  .step h3 { font-size: 22px; margin-bottom: 8px; }
+  .step p { margin: 0; color: var(--muted); }
+
+  /* Features */
+  .features { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
+  .feature {
+    background: var(--surface); border: 2px solid var(--line); border-radius: 24px; padding: 26px;
+  }
+  .feature .ico {
+    width: 52px; height: 52px; border-radius: 16px; display: grid; place-items: center;
+    font-size: 26px; margin-bottom: 14px;
+  }
+  .feature h3 { font-size: 20px; margin-bottom: 6px; }
+  .feature p { margin: 0; color: var(--muted); font-size: 16px; }
+  .i-orange { background: rgba(242,98,27,0.14); }
+  .i-red { background: rgba(255,75,75,0.14); }
+  .i-blue { background: rgba(30,91,255,0.14); }
+  .i-yellow { background: rgba(255,200,0,0.2); }
+  .i-sky { background: rgba(46,211,245,0.18); }
+
+  /* Screens */
+  .screens-bg { background: linear-gradient(180deg, var(--bg), rgba(30,91,255,0.07)); }
+  .screens { display: grid; grid-template-columns: repeat(3, 1fr); gap: 28px; align-items: start; }
+  .screen figure { margin: 0; }
+  .screen .phone { transform: none; width: 100%; max-width: 280px; }
+  .screen:nth-child(2) { margin-top: 40px; }
+  .screen figcaption { text-align: center; margin-top: 18px; }
+  .screen figcaption strong { display: block; font-size: 19px; font-weight: 900; }
+  .screen figcaption span { color: var(--muted); font-size: 15px; }
+
+  /* Final CTA */
+  .final {
+    background: linear-gradient(135deg, var(--blue), var(--sky));
+    color: #fff; border-radius: 32px; padding: 56px 32px; text-align: center;
+    display: flex; flex-direction: column; align-items: center; gap: 18px;
+  }
+  .final img { width: 96px; height: 96px; border-radius: 24px; box-shadow: 0 10px 30px rgba(0,0,0,0.25); }
+  .final h2 { font-size: clamp(28px, 4vw, 42px); }
+  .final p { margin: 0; max-width: 40ch; opacity: 0.95; }
+  .final .btn-soon { color: var(--blue); }
+
+  footer { padding: 40px 0 56px; color: var(--muted); font-size: 15px; }
+  footer .wrap { display: flex; flex-wrap: wrap; gap: 12px 24px; justify-content: space-between; align-items: center; }
+  footer nav { display: flex; gap: 20px; }
+  footer a { text-decoration: none; }
+  footer a:hover { color: var(--text); }
+
+  @media (max-width: 860px) {
+    .hero-grid { grid-template-columns: 1fr; text-align: center; padding: 24px 0 56px; }
+    .hero p.lead { margin-left: auto; margin-right: auto; }
+    .cta-row { justify-content: center; }
+    .phone { transform: none; width: min(260px, 70vw); }
+    .steps, .features { grid-template-columns: 1fr; }
+    .screens { grid-template-columns: 1fr; gap: 48px; }
+    .screen:nth-child(2) { margin-top: 0; }
+    .screen .phone { max-width: 260px; }
+    section { padding: 56px 0; }
+    .nav a.link.hide-sm { display: none; }
+  }
+  @media (min-width: 861px) and (max-width: 1020px) {
+    .features { grid-template-columns: repeat(2, 1fr); }
+  }
+</style>
+</head>
+<body>
+
+<header class="hero">
+  <div class="wrap">
+    <nav class="nav">
+      <a class="brand" href="./"><img src="assets/icon.png" alt="" />ZippyFit</a>
+      <a class="link hide-sm" href="#features">Features</a>
+    </nav>
+    <div class="hero-grid">
+      <div>
+        <span class="eyebrow">Co-op fitness game</span>
+        <h1>The fitness game you play <em>with a partner.</em></h1>
+        <p class="lead">Work out together and keep your streak alive. Miss a day and you <strong>both</strong> feel it.</p>
+        <div class="cta-row">
+          <span class="btn btn-soon" aria-label="Coming soon to Google Play">
+            <svg width="22" height="24" viewBox="0 0 22 24" aria-hidden="true"><path fill="currentColor" d="M1 1.2 12.3 12 1 22.8c-.4-.2-.6-.7-.6-1.2V2.4c0-.5.2-1 .6-1.2Zm12.4 11.9 2.9 2.8-12.6 7.2 9.7-10Zm0-2.2L3.7.9l12.6 7.2-2.9 2.8Zm4.3-1.9 3 1.7c.9.5.9 1.8 0 2.3l-3 1.7-3.2-3 3.2-2.7Z"/></svg>
+            <span><small>Coming soon to</small>Google Play</span>
+          </span>
+          <a class="btn btn-ghost" href="#how">See how it works</a>
+        </div>
+      </div>
+      <div class="phone">
+        <img src="screenshots/dashboard.png" alt="ZippyFit journey map with Zippy the mascot and the challenge of the day" width="1080" height="2400" />
+      </div>
+    </div>
+  </div>
+</header>
+
+<main>
+  <section id="how">
+    <div class="wrap">
+      <div class="section-head">
+        <h2>Accountability, but make it co-op</h2>
+        <p>Your streak lives or dies as a team. That small bit of pressure is what gets you out the door.</p>
+      </div>
+      <div class="steps">
+        <div class="step">
+          <h3>Form a Duo</h3>
+          <p>Share a 4-character invite code with a friend. Now you are a team.</p>
+        </div>
+        <div class="step">
+          <h3>Beat the daily challenge</h3>
+          <p>Each day brings a new workout goal. Do it, then slide to complete.</p>
+        </div>
+        <div class="step">
+          <h3>Keep the streak alive</h3>
+          <p>Show up together and the streak grows. If one of you skips, the team loses a heart.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="features" style="padding-top: 0;">
+    <div class="wrap">
+      <div class="section-head">
+        <h2>Everything a Duo needs</h2>
+        <p>Built to make showing up feel like a game, not a chore.</p>
+      </div>
+      <div class="features">
+        <div class="feature">
+          <div class="ico i-blue" aria-hidden="true">👯</div>
+          <h3>Duo teams</h3>
+          <p>Pair up with one partner and train side by side, live.</p>
+        </div>
+        <div class="feature">
+          <div class="ico i-red" aria-hidden="true">🔥</div>
+          <h3>Streaks &amp; hearts</h3>
+          <p>Shared streaks, shared hearts. Your partner counts on you.</p>
+        </div>
+        <div class="feature">
+          <div class="ico i-orange" aria-hidden="true">🗺️</div>
+          <h3>Journey map</h3>
+          <p>See every day of your team's progress on one path.</p>
+        </div>
+        <div class="feature">
+          <div class="ico i-yellow" aria-hidden="true">📜</div>
+          <h3>The Grimoire</h3>
+          <p>Unlock a Scroll Fragment of fitness wisdom with every workout.</p>
+        </div>
+        <div class="feature">
+          <div class="ico i-sky" aria-hidden="true">👋</div>
+          <h3>Nudge &amp; Spot</h3>
+          <p>Poke a partner who is slacking, or ask for a spot on a hard day.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="screens-bg">
+    <div class="wrap">
+      <div class="section-head">
+        <h2>Meet Zippy</h2>
+        <p>Your lightning-fast coach cheers you on every step of the journey.</p>
+      </div>
+      <div class="screens">
+        <div class="screen">
+          <figure>
+            <div class="phone"><img src="screenshots/dashboard.png" alt="Journey map screen" loading="lazy" width="1080" height="2400" /></div>
+            <figcaption><strong>Daily journey</strong><span>One challenge a day, one step on the map.</span></figcaption>
+          </figure>
+        </div>
+        <div class="screen">
+          <figure>
+            <div class="phone"><img src="screenshots/nudge.png" alt="Nudge your partner screen" loading="lazy" width="1080" height="2400" /></div>
+            <figcaption><strong>Nudge your partner</strong><span>A friendly poke goes a long way.</span></figcaption>
+          </figure>
+        </div>
+        <div class="screen">
+          <figure>
+            <div class="phone"><img src="screenshots/grimoire.png" alt="The Grimoire with unlocked fitness facts" loading="lazy" width="1080" height="2400" /></div>
+            <figcaption><strong>Grow your Grimoire</strong><span>Collect fitness facts as you train.</span></figcaption>
+          </figure>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="wrap">
+      <div class="final">
+        <img src="assets/icon.png" alt="ZippyFit app icon" />
+        <h2>Grab a partner. Start your streak.</h2>
+        <p>ZippyFit is coming to Android soon.</p>
+        <span class="btn btn-soon" aria-label="Coming soon to Google Play">
+          <svg width="22" height="24" viewBox="0 0 22 24" aria-hidden="true"><path fill="currentColor" d="M1 1.2 12.3 12 1 22.8c-.4-.2-.6-.7-.6-1.2V2.4c0-.5.2-1 .6-1.2Zm12.4 11.9 2.9 2.8-12.6 7.2 9.7-10Zm0-2.2L3.7.9l12.6 7.2-2.9 2.8Zm4.3-1.9 3 1.7c.9.5.9 1.8 0 2.3l-3 1.7-3.2-3 3.2-2.7Z"/></svg>
+          <span><small>Coming soon to</small>Google Play</span>
+        </span>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <span>© 2026 ZippyFit</span>
+    <nav>
+      <a href="privacy-policy.html">Privacy Policy</a>
+      <a href="https://github.com/zepvalue/zippy-fit">GitHub</a>
+    </nav>
+  </div>
+</footer>
+
+</body>
+</html>
